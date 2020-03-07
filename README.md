@@ -49,7 +49,7 @@
    或
 
    ```go
-   		v3 := &version3{
+   	v3 := &version3{
    		A: 22,
    		B: 33,
    		C: "ccc",

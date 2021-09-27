@@ -82,8 +82,11 @@ const (
 	THVTByte         THValueType = iota // one byte value
 	THVTSingleHeader                    // single byte header
 	THVTMultiHeader                     // multi bytes header
+)
 
-	MaxNested = 100 // max nested times when encoding. pointer, slice, array, map, struct
+const (
+	MaxSliceSize = 100 * 1024 * 1024 // max size of creating slice: 100MB
+	MaxNested    = 100               // max nested times when encoding. pointer, slice, array, map, struct
 )
 
 // Encoder is the interface which encoding package while invoke the Serialization()
@@ -140,7 +143,7 @@ var (
 		THArraySingle:   {"SmallArray", 0x90, 0xF0, ^byte(0xF0), THVTSingleHeader},
 		THArrayMulti:    {"Array", 0x88, 0xF8, ^byte(0xF8), THVTMultiHeader},
 		THPosNumSingle:  {"PositiveNumberSingleByte", 0xA0, 0xF8, ^byte(0xF8), THVTSingleHeader},
-		THNegNumSingle:  {"NegativeNumberSIngleByte", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader},
+		THNegNumSingle:  {"NegativeNumberSingleByte", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader},
 		THPosBigInt:     {"PositiveNumberMultiBytes", 0xB0, 0xF8, ^byte(0xF8), THVTMultiHeader},
 		THNegBigInt:     {"NegativeNumberMultiBytes", 0xB8, 0xF8, ^byte(0xF8), THVTMultiHeader},
 		THStringSingle:  {"StringSingleByte", 0xC0, 0xE0, ^byte(0xE0), THVTSingleHeader},
@@ -182,6 +185,7 @@ var (
 	ErrInsufficientLength = errors.New("insufficient length of the slice")
 	ErrDecode             = errors.New("decode error")
 	ErrLength             = errors.New("length error")
+	ErrTooLarge           = errors.New("too large to create")
 	ErrDecodeIntoNil      = errors.New("rtl: decode pointer MUST NOT be nil")
 	ErrDecodeNoPtr        = errors.New("rtl: value being decode MUST be a pointer")
 )

@@ -253,53 +253,15 @@ func (r *bufValueReader) Read(p []byte) (int, error) {
 // ReadBytes read length bytes and return a slice, if parameter bytes length not
 // sufficient, will create a new slice
 func (r *bufValueReader) ReadBytes(length int, bytes []byte) ([]byte, error) {
-	// if length <= 0 {
-	//	return bytes, ErrLength
-	// }
-	// if bytes == nil && length > len(bytes) {
-	//	bytes = make([]byte, length)
-	// }
-	// n, err := r.Read(bytes[0:length])
-	// if err != nil {
-	//	return bytes, err
-	// }
-	// if n != length {
-	//	return bytes, fmt.Errorf("rtl length error: expect %d but %d readed", length, n)
-	// }
-	// return bytes, nil
 	return ReadBytesFromReader(r, length, bytes)
 }
 
 // ReadMultiLength read length of multi bytes header value's length
 func (r *bufValueReader) ReadMultiLength(length int) (uint64, error) {
-	// if length == 1 {
-	//	b, err := r.ReadByte()
-	//	if err != nil {
-	//		return 0, err
-	//	}
-	//	return uint64(b), nil
-	// } else {
-	//	lbuf, err := r.ReadBytes(length, nil)
-	//	if err != nil {
-	//		return 0, err
-	//	}
-	//	return Numeric.BytesToUint64(lbuf), nil
-	// }
 	return ReadMultiLengthFromReader(r, length)
 }
 
 func (r *bufValueReader) ReadMultiLengthBytes(length int, bytes []byte) ([]byte, error) {
-	// l, err := r.ReadMultiLength(length)
-	// if err != nil {
-	//	return nil, err
-	// }
-	//
-	// buf, err := r.ReadBytes(int(l), bytes)
-	// if err != nil {
-	//	return bytes, err
-	// }
-	//
-	// return buf, nil
 	return ReadMultiLengthBytesFromReader(r, length, bytes)
 }
 
@@ -328,6 +290,7 @@ func ReadBytesFromReader(r io.Reader, length int, bytes []byte) ([]byte, error) 
 	if length <= 0 {
 		return bytes, ErrLength
 	}
+
 	if bytes == nil && length > len(bytes) {
 		bytes = make([]byte, length)
 	}

@@ -33,17 +33,18 @@ type ValueReader interface {
 }
 
 type noBufValueReader struct {
-	reader    io.Reader
-	eof       bool
-	readCount int
-	header    [1]byte
+	reader     io.Reader
+	eof        bool
+	readCount  int
+	header     [1]byte
+	readerSize int
 }
 
 func EndOfFile(err error) bool {
 	return err == io.EOF || err == io.ErrUnexpectedEOF
 }
 
-func (r *noBufValueReader) filerErr(err error) error {
+func (r *noBufValueReader) filterErr(err error) error {
 	if EndOfFile(err) {
 		r.eof = true
 		return io.EOF
@@ -62,13 +63,17 @@ func (r *noBufValueReader) HasMore() bool {
 	return true
 }
 
+func (r *noBufValueReader) left() int {
+	return r.readerSize - r.readCount
+}
+
 func (r *noBufValueReader) ReadHeader() (TypeHeader, uint32, error) {
 	if !r.HasMore() {
 		return 0, 0, io.EOF
 	}
 	b, err := r.ReadByte()
 	if err != nil {
-		return 0, 0, r.filerErr(err)
+		return 0, 0, r.filterErr(err)
 	}
 	return ParseRTLHeader(b)
 }
@@ -80,7 +85,7 @@ func (r *noBufValueReader) ReadByte() (byte, error) {
 	n, err := io.ReadFull(r.reader, r.header[:])
 	r.readCount += n
 	if err != nil {
-		return 0, r.filerErr(err)
+		return 0, r.filterErr(err)
 	}
 	if n <= 0 {
 		r.eof = true
@@ -96,7 +101,7 @@ func (r *noBufValueReader) Read(p []byte) (int, error) {
 
 	n, err := io.ReadFull(r.reader, p)
 	r.readCount += n
-	return n, r.filerErr(err)
+	return n, r.filterErr(err)
 }
 
 func (r *noBufValueReader) ReadBytes(length int, bytes []byte) ([]byte, error) {
@@ -104,7 +109,15 @@ func (r *noBufValueReader) ReadBytes(length int, bytes []byte) ([]byte, error) {
 }
 
 func (r *noBufValueReader) ReadMultiLength(length int) (uint64, error) {
-	return ReadMultiLengthFromReader(r, length)
+	ret, err := ReadMultiLengthFromReader(r, length)
+	if err != nil {
+		return 0, err
+	}
+	left := r.left()
+	if left <= 0 || ret > uint64(left) {
+		return 0, fmt.Errorf("%d bytes multi-length(%d) is larger than left(%d)", length, ret, left)
+	}
+	return ret, nil
 }
 
 func (r *noBufValueReader) ReadMultiLengthBytes(length int, bytes []byte) ([]byte, error) {
@@ -112,13 +125,14 @@ func (r *noBufValueReader) ReadMultiLengthBytes(length int, bytes []byte) ([]byt
 }
 
 type bufValueReader struct {
-	reader    io.Reader // basic reader
-	eof       bool      // if the reader EOF
-	lastError error     // error of last reading(if exist, except io.EOF)
-	buffer    []byte    // buffered bytes
-	available uint32    // length of available bytes in buffer
-	offset    uint32    // offset for buffer of reading
-	readCount int       // counting the read bytes
+	reader     io.Reader // basic reader
+	eof        bool      // if the reader EOF
+	lastError  error     // error of last reading(if exist, except io.EOF)
+	buffer     []byte    // buffered bytes
+	available  uint32    // length of available bytes in buffer
+	offset     uint32    // offset for buffer of reading
+	readCount  int       // counting the read bytes
+	readerSize int       // summary size of the reader, if it's a stream, set to MaxSliceSize
 }
 
 func (r *bufValueReader) ResetCount() {
@@ -134,6 +148,10 @@ func (r *bufValueReader) HasMore() bool {
 		return true
 	}
 	return r.next()
+}
+
+func (r *bufValueReader) left() int {
+	return r.readerSize - r.readCount
 }
 
 // next read more bytes to buffer when buffer is empty,
@@ -258,7 +276,15 @@ func (r *bufValueReader) ReadBytes(length int, bytes []byte) ([]byte, error) {
 
 // ReadMultiLength read length of multi bytes header value's length
 func (r *bufValueReader) ReadMultiLength(length int) (uint64, error) {
-	return ReadMultiLengthFromReader(r, length)
+	ret, err := ReadMultiLengthFromReader(r, length)
+	if err != nil {
+		return 0, err
+	}
+	left := r.left()
+	if left <= 0 || ret > uint64(left) {
+		return 0, fmt.Errorf("%d bytes multi-length(%d) is larger than left(%d)", length, ret, left)
+	}
+	return ret, nil
 }
 
 func (r *bufValueReader) ReadMultiLengthBytes(length int, bytes []byte) ([]byte, error) {
@@ -335,15 +361,26 @@ func ReadMultiLengthBytesFromReader(vr ValueReader, length int, bytes []byte) ([
 }
 
 func NewValueReader(r io.Reader, bufferSize int) ValueReader {
+	len := int(MaxSliceSize)
+	lenner, ok := r.(Lenner)
+	if ok {
+		len = lenner.Len()
+	}
 	if bufferSize > 0 {
 		return &bufValueReader{
-			reader:    r,
-			eof:       false,
-			buffer:    make([]byte, bufferSize),
-			available: 0,
-			offset:    0,
+			reader:     r,
+			eof:        false,
+			buffer:     make([]byte, bufferSize),
+			available:  0,
+			offset:     0,
+			readerSize: len,
 		}
 	} else {
-		return &noBufValueReader{reader: r, eof: false, readCount: 0}
+		return &noBufValueReader{
+			reader:     r,
+			eof:        false,
+			readCount:  0,
+			readerSize: len,
+		}
 	}
 }

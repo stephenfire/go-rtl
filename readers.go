@@ -24,6 +24,10 @@ import (
 	"reflect"
 )
 
+type Lenner interface {
+	Len() int
+}
+
 type typeReaderFunc func(length int, vr ValueReader, value reflect.Value, nesting int) error
 
 func unsupported(length int, vr ValueReader, value reflect.Value, nesting int) error {
@@ -617,32 +621,6 @@ func valueReader(r ValueReader, value reflect.Value) error {
 }
 
 func valueReader0(vr ValueReader, value reflect.Value, nesting int) error {
-	// typ := value.Type()
-	// if typ.Implements(TypeOfDecoder) {
-	// 	if typ.Kind() == reflect.Ptr && value.IsNil() {
-	// 		nvalue := reflect.New(typ.Elem())
-	// 		value.Set(nvalue)
-	// 	}
-	// 	decoder, _ := value.Interface().(Decoder)
-	// 	return decoder.Deserialization(vr)
-	// }
-	// if typ.Kind() == reflect.Ptr {
-	// 	etyp := typ.Elem()
-	// 	// if value.IsNil() {
-	// 	// 	nvalue := reflect.New(etyp)
-	// 	// 	value.Set(nvalue)
-	// 	// }
-	// 	if etyp.Implements(TypeOfDecoder) {
-	// 		elem := value.Elem()
-	// 		if elem.Kind() == reflect.Ptr && elem.IsNil() {
-	// 			evalue := reflect.New(etyp.Elem())
-	// 			elem.Set(evalue)
-	// 		}
-	// 		decoder, _ := elem.Interface().(Decoder)
-	// 		return decoder.Deserialization(vr)
-	// 	}
-	// }
-
 	// decode itself if the value implements encoding.Decoder interface
 	isDecoder, err := checkTypeOfDecoder(vr, value)
 	if isDecoder || err != nil {
@@ -675,7 +653,6 @@ func valueReader1(th TypeHeader, length int, vr ValueReader, value reflect.Value
 
 	// big.Rat or *big.Rat
 	if typ.AssignableTo(typeOfBigRat) || typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
-		// if typ.AssignableTo(typeOfBigRatPtr) {
 		return bigRatReader0(th, int(length), vr, value, nesting)
 	}
 

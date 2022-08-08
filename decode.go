@@ -26,7 +26,7 @@ func Unmarshal(buf []byte, v interface{}) error {
 	return Decode(NewValueReader(bytes.NewBuffer(buf), 0), v)
 }
 
-// Decode reads bytes from r unmarshal to v, if you want use same Reader to Decode multi
+// Decode reads bytes from r unmarshal to v, if you want to use same Reader to Decode multi
 // values, you should use encoding.ValueReader as io.Reader.
 func Decode(r io.Reader, v interface{}) error {
 	if v == nil {

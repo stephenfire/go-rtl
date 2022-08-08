@@ -155,7 +155,7 @@ func (r *bufValueReader) left() int {
 }
 
 // next read more bytes to buffer when buffer is empty,
-// and return whether has more bytes in buffer
+// and return if it has more bytes in buffer
 func (r *bufValueReader) next() bool {
 	if r.available > r.offset {
 		return true
@@ -361,10 +361,10 @@ func ReadMultiLengthBytesFromReader(vr ValueReader, length int, bytes []byte) ([
 }
 
 func NewValueReader(r io.Reader, bufferSize int) ValueReader {
-	len := int(MaxSliceSize)
+	l := MaxSliceSize
 	lenner, ok := r.(Lenner)
 	if ok {
-		len = lenner.Len()
+		l = lenner.Len()
 	}
 	if bufferSize > 0 {
 		return &bufValueReader{
@@ -373,14 +373,14 @@ func NewValueReader(r io.Reader, bufferSize int) ValueReader {
 			buffer:     make([]byte, bufferSize),
 			available:  0,
 			offset:     0,
-			readerSize: len,
+			readerSize: l,
 		}
 	} else {
 		return &noBufValueReader{
 			reader:     r,
 			eof:        false,
 			readCount:  0,
-			readerSize: len,
+			readerSize: l,
 		}
 	}
 }

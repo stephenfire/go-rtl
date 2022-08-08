@@ -89,26 +89,46 @@ const (
 	MaxNested    = 100               // max nested times when encoding. pointer, slice, array, map, struct
 )
 
-// Encoder is the interface which encoding package while invoke the Serialization()
-// when encoding the object.
-// ATTENTION: the receiver of Encoder.Serialization() and Decoder.Deserialization() MUST
-// BE SAME. otherwise, they will not be use in same struct.
-type Encoder interface {
-	Serialization(w io.Writer) error
-}
+type (
+	// Encoder is the interface which encoding package while invoke the Serialization()
+	// when encoding the object.
+	// ATTENTION: the receiver of Encoder.Serialization() and Decoder.Deserialization() MUST
+	// BE SAME. otherwise, they will not be use in same struct.
+	Encoder interface {
+		Serialization(w io.Writer) error
+	}
 
-type Decoder interface {
-	Deserialization(r io.Reader) (shouldBeNil bool, err error)
-}
+	Decoder interface {
+		Deserialization(r io.Reader) (shouldBeNil bool, err error)
+	}
+)
+
+var (
+	NilOrFalse   = headerTypeMap[THZeroValue].C
+	NotNilOrTrue = headerTypeMap[THTrue].C
+	Version0     = headerTypeMap[THVersion].WithNumber(0x0)
+	Version1     = headerTypeMap[THVersion].WithNumber(0x1)
+	Version2     = headerTypeMap[THVersion].WithNumber(0x2)
+	Version3     = headerTypeMap[THVersion].WithNumber(0x3)
+	Version4     = headerTypeMap[THVersion].WithNumber(0x4)
+	Version5     = headerTypeMap[THVersion].WithNumber(0x5)
+	Version6     = headerTypeMap[THVersion].WithNumber(0x6)
+	Version7     = headerTypeMap[THVersion].WithNumber(0x7)
+	Version8     = headerTypeMap[THVersion].WithNumber(0x8)
+	Version9     = headerTypeMap[THVersion].WithNumber(0x9)
+	Version10    = headerTypeMap[THVersion].WithNumber(0xa)
+	Version11    = headerTypeMap[THVersion].WithNumber(0xb)
+	Version12    = headerTypeMap[THVersion].WithNumber(0xc)
+	Version13    = headerTypeMap[THVersion].WithNumber(0xd)
+	Version14    = headerTypeMap[THVersion].WithNumber(0xe)
+	Version15    = headerTypeMap[THVersion].WithNumber(0xf)
+)
 
 var (
 	// static encoding
 	zeroValues  = []byte{headerTypeMap[THZeroValue].C}
 	trueBools   = []byte{headerTypeMap[THTrue].C}
 	emptyValues = []byte{headerTypeMap[THEmpty].C}
-
-	NilOrFalse   = headerTypeMap[THZeroValue].C
-	NotNilOrTrue = headerTypeMap[THTrue].C
 
 	// header maker of encoding
 	HeadMaker headMaker

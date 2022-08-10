@@ -366,7 +366,7 @@ func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
 	}
 	for i := 0; i < typ.NumField(); i++ {
 		// exported field
-		if f := typ.Field(i); f.IsExported() {
+		if f := typ.Field(i); f.PkgPath == "" {
 			tagStr := f.Tag.Get("rtl")
 			ignored := false
 			for _, tag := range strings.Split(tagStr, ",") {

@@ -26,7 +26,7 @@ func TestValueReader(t *testing.T) {
 	bs := []byte("e1384c6f72656d20697073756d20646f6c6f722073697420616d65742c20636f6e7365637465747572206164697069736963696e6720656c6974")
 	buf := bytes.NewBuffer(bs)
 	l := len(bs)
-	vr := NewValueReader(buf, 0)
+	vr := NewValueReader(buf)
 	var sum, count int
 	b := make([]byte, 10)
 	for {

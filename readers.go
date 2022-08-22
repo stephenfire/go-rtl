@@ -382,7 +382,8 @@ func toStruct0(length int, vr ValueReader, value reflect.Value, nesting int) err
 				}
 				nextOrder = fnames[nextIndex].order
 			} else if i < nextOrder {
-				if err := skipOneValue(vr, nesting); err != nil {
+				// if err := skipOneValue(vr, nesting); err != nil {
+				if _, err := vr.Skip(); err != nil {
 					return err
 				}
 			} else {
@@ -410,58 +411,58 @@ func toStruct0(length int, vr ValueReader, value reflect.Value, nesting int) err
 	return nil
 }
 
-func skipOneValue(vr ValueReader, nesting int) error {
-	th, length, err := vr.ReadHeader()
-	if err != nil {
-		return err
-	}
-	return skipValue(th, int(length), vr, nesting)
-}
-
-// 对象的升级是指在原有struct的属性后增加新的字段，删除字段后，要保持剩余字段的原rtlorder值，
-// 这样当旧版数据恢复到新版类型时，回跳过已删除字段，新增字段保持该对象的原值。
-// 当把新版数据恢复到旧版类型中时，因为新版数据中被删除的字段被填了空值，这样会使得在新版类型
-// 已经删除的字段为空值，新版类型增加的字段被跳过，其他值正常恢复。
-// 这里需要注意的是那些自定义读写规则的类型，他们的写入和读取规则都是非标准的，一旦这样的字段
-// 被删除或新增，那么就会导致新版类型读取旧版数据或旧版类型读取新版数据时无法正常跳过，导致出
-// 现无法预测的错误，所以，如果想具有兼容性，就不允许对自定义读写规则的字段进行增删。
-func skipValue(th TypeHeader, length int, vr ValueReader, nesting int) error {
-	if nesting > MaxNested {
-		return ErrNestingOverflow
-	}
-	thv, exist := headerTypeMap[th]
-	if !exist {
-		return ErrUnsupported
-	}
-	switch thv.T {
-	case THVTByte:
-	case THVTSingleHeader, THVTMultiHeader:
-		l := uint64(length)
-		if thv.T == THVTMultiHeader {
-			var err error
-			l, err = vr.ReadMultiLength(length)
-			if err != nil {
-				return err
-			}
-		}
-		if th == THArraySingle || th == THArrayMulti {
-			nesting++
-			// 跳过多个对象
-			for i := uint64(0); i < l; i++ {
-				if err := skipOneValue(vr, nesting); err != nil {
-					return err
-				}
-			}
-		} else {
-			// 跳过多个byte
-			_, err := vr.ReadBytes(int(l), nil)
-			if err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
+// func skipOneValue(vr ValueReader, nesting int) error {
+// 	th, length, err := vr.ReadHeader()
+// 	if err != nil {
+// 		return err
+// 	}
+// 	return skipValue(th, int(length), vr, nesting)
+// }
+//
+// // 对象的升级是指在原有struct的属性后增加新的字段，删除字段后，要保持剩余字段的原rtlorder值，
+// // 这样当旧版数据恢复到新版类型时，回跳过已删除字段，新增字段保持该对象的原值。
+// // 当把新版数据恢复到旧版类型中时，因为新版数据中被删除的字段被填了空值，这样会使得在新版类型
+// // 已经删除的字段为空值，新版类型增加的字段被跳过，其他值正常恢复。
+// // 这里需要注意的是那些自定义读写规则的类型，他们的写入和读取规则都是非标准的，一旦这样的字段
+// // 被删除或新增，那么就会导致新版类型读取旧版数据或旧版类型读取新版数据时无法正常跳过，导致出
+// // 现无法预测的错误，所以，如果想具有兼容性，就不允许对自定义读写规则的字段进行增删。
+// func skipValue(th TypeHeader, length int, vr ValueReader, nesting int) error {
+// 	if nesting > MaxNested {
+// 		return ErrNestingOverflow
+// 	}
+// 	thv, exist := headerTypeMap[th]
+// 	if !exist {
+// 		return ErrUnsupported
+// 	}
+// 	switch thv.T {
+// 	case THVTByte:
+// 	case THVTSingleHeader, THVTMultiHeader:
+// 		l := uint64(length)
+// 		if thv.T == THVTMultiHeader {
+// 			var err error
+// 			l, err = vr.ReadMultiLength(length)
+// 			if err != nil {
+// 				return err
+// 			}
+// 		}
+// 		if th == THArraySingle || th == THArrayMulti {
+// 			nesting++
+// 			// 跳过多个对象
+// 			for i := uint64(0); i < l; i++ {
+// 				if err := skipOneValue(vr, nesting); err != nil {
+// 					return err
+// 				}
+// 			}
+// 		} else {
+// 			// 跳过多个byte
+// 			_, err := vr.ReadBytes(int(l), nil)
+// 			if err != nil {
+// 				return err
+// 			}
+// 		}
+// 	}
+// 	return nil
+// }
 
 var (
 	// fill in value, which must be a *big.Int

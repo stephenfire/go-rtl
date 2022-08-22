@@ -23,7 +23,7 @@ import (
 )
 
 func Unmarshal(buf []byte, v interface{}) error {
-	return Decode(NewValueReader(bytes.NewBuffer(buf), 0), v)
+	return Decode(NewValueReader(bytes.NewBuffer(buf)), v)
 }
 
 // Decode reads bytes from r unmarshal to v, if you want to use same Reader to Decode multi
@@ -41,15 +41,15 @@ func Decode(r io.Reader, v interface{}) error {
 		return ErrDecodeIntoNil
 	}
 
-	isDecoder, err := checkTypeOfDecoder(r, rv)
-	if isDecoder || err != nil {
-		return err
-	}
+	// isDecoder, err := checkTypeOfDecoder(r, rv)
+	// if isDecoder || err != nil {
+	// 	return err
+	// }
 
 	rev := rv.Elem()
 	vr, ok := r.(ValueReader)
 	if !ok {
-		vr = NewValueReader(r, 0)
+		vr = NewValueReader(r)
 	}
 	if err := valueReader(vr, rev); err != nil {
 		return err
@@ -112,7 +112,7 @@ func DecodeBigInt(r io.Reader, v interface{}) error {
 	}
 	vr, ok := r.(ValueReader)
 	if !ok {
-		vr = NewValueReader(r, 0)
+		vr = NewValueReader(r)
 	}
 	value := reflect.ValueOf(v)
 	th, length, err := vr.ReadHeader()

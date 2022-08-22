@@ -406,6 +406,14 @@ type version4 struct {
 	G version2 `rtlorder:"6"`
 }
 
+type version5 struct {
+	A uint     `rtlorder:"0"`
+	C string   `rtlorder:"5"`
+	E int      `rtlorder:"3"`
+	F *big.Int `rtlorder:"4"`
+	H version3 `rtlorder:"7"`
+}
+
 func TestVersion(t *testing.T) {
 	{
 		v1 := &version1{A: 87690, B: 12345}
@@ -532,7 +540,18 @@ func TestVersion(t *testing.T) {
 		if v1.A == 0 && v1.B == 0 {
 			t.Log("version4 -> version1 check")
 		} else {
-			t.Errorf("version4 -> version1 failed, %+v -> %+v", v3, v1)
+			t.Errorf("version4 -> version1 failed, %+v -> %+v", v4, v1)
+		}
+
+		v5 := new(version5)
+		if err := Decode(bytes.NewReader(bs), v5); err != nil {
+			t.Fatalf("version4 -> version5 failed: %v", err)
+		}
+		if v5.A == 0 && v5.C == v4.C && v5.E == v4.E && v5.F.Cmp(v4.F) == 0 &&
+			v5.H.A == 0 && v5.H.B == 0 && v5.H.C == "" && v5.H.E == 0 && v5.H.F == nil && v5.H.G.A == 0 && v5.H.G.B == 0 {
+			t.Log("version4 -> version5 check")
+		} else {
+			t.Errorf("version4 -> version5 failed, %+v -> %x -> %+v", v4, bs, v5)
 		}
 	}
 }

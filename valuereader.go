@@ -159,7 +159,7 @@ func (r *defaultVR) Skip() (int, error) {
 		return 0, io.EOF
 	}
 
-	var stack []headerStack
+	var stack []*headerStack
 	skiped := 0
 
 	readAndPush := func() error {
@@ -183,7 +183,7 @@ func (r *defaultVR) Skip() (int, error) {
 			size = int(ml)
 		}
 
-		stack = append(stack, headerStack{
+		stack = append(stack, &headerStack{
 			th:    th,
 			vt:    vt,
 			size:  size,

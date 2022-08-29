@@ -30,7 +30,7 @@ type Lenner interface {
 
 type typeReaderFunc func(length int, vr ValueReader, value reflect.Value, nesting int) error
 
-func unsupported(length int, vr ValueReader, value reflect.Value, nesting int) error {
+func unsupported(_ int, _ ValueReader, _ reflect.Value, _ int) error {
 	return ErrUnsupported
 }
 
@@ -64,7 +64,7 @@ func toSmallBigInt(length int, vr ValueReader, isNegative bool, value reflect.Va
 }
 
 // toBigBigInt decode multi bytes header value to big.Int
-func toBigBigInt(length int, vr ValueReader, value reflect.Value, nesting int) error {
+func toBigBigInt(length int, vr ValueReader, value reflect.Value, _ int) error {
 	buf, err := vr.ReadMultiLengthBytes(length, nil)
 	if err != nil {
 		return err
@@ -74,7 +74,7 @@ func toBigBigInt(length int, vr ValueReader, value reflect.Value, nesting int) e
 	return nil
 }
 
-func toBigNegBigInt(length int, vr ValueReader, value reflect.Value, nesting int) error {
+func toBigNegBigInt(length int, vr ValueReader, value reflect.Value, _ int) error {
 	buf, err := vr.ReadMultiLengthBytes(length, nil)
 	if err != nil {
 		return err
@@ -115,7 +115,7 @@ func toInt(length int, vr ValueReader, isNegative bool, value reflect.Value) err
 }
 
 // toUint decode single byte header bytes to uint value
-func toUint(length int, vr ValueReader, value reflect.Value, nesting int) error {
+func toUint(length int, vr ValueReader, value reflect.Value, _ int) error {
 	buf, err := vr.ReadBytes(length, nil)
 	if err != nil {
 		return err
@@ -251,16 +251,12 @@ func toArray0(length int, vr ValueReader, value reflect.Value, nesting int) erro
 }
 
 func singleByteToSlice0(length int, vr ValueReader, value reflect.Value, nesting int) error {
-	if err := checkSlice0(1, value); err != nil {
-		return err
-	}
+	checkSlice0(1, value)
 	return singleByteToArray0(length, vr, value, nesting)
 }
 
 func stringSingleToSlice0(length int, vr ValueReader, value reflect.Value, nesting int) error {
-	if err := checkSlice0(length, value); err != nil {
-		return err
-	}
+	checkSlice0(length, value)
 	return stringSingleToArray0(length, vr, value, nesting)
 }
 
@@ -269,16 +265,12 @@ func stringMultiToSlice0(length int, vr ValueReader, value reflect.Value, nestin
 	if err != nil {
 		return err
 	}
-	if err := checkSlice0(int(l), value); err != nil {
-		return err
-	}
+	checkSlice0(int(l), value)
 	return stringSingleToArray0(int(l), vr, value, nesting)
 }
 
 func arraySingleToSlice0(length int, vr ValueReader, value reflect.Value, nesting int) error {
-	if err := checkSlice0(length, value); err != nil {
-		return err
-	}
+	checkSlice0(length, value)
 	return arraySingleToArray0(length, vr, value, nesting)
 }
 
@@ -287,13 +279,11 @@ func arrayMultiToSlice0(length int, vr ValueReader, value reflect.Value, nesting
 	if err != nil {
 		return err
 	}
-	if err := checkSlice0(int(l), value); err != nil {
-		return err
-	}
+	checkSlice0(int(l), value)
 	return arraySingleToArray0(int(l), vr, value, nesting)
 }
 
-func checkSlice0(length int, value reflect.Value) error {
+func checkSlice0(length int, value reflect.Value) {
 	if length > value.Cap() {
 		newv := reflect.MakeSlice(value.Type(), length, length)
 		value.Set(newv)
@@ -301,7 +291,6 @@ func checkSlice0(length int, value reflect.Value) error {
 	if length != value.Len() {
 		value.SetLen(length)
 	}
-	return nil
 }
 
 func arraySingleToMap0(length int, vr ValueReader, value reflect.Value, nesting int) error {
@@ -382,7 +371,6 @@ func toStruct0(length int, vr ValueReader, value reflect.Value, nesting int) err
 				}
 				nextOrder = fnames[nextIndex].order
 			} else if i < nextOrder {
-				// if err := skipOneValue(vr, nesting); err != nil {
 				if _, err := vr.Skip(); err != nil {
 					return err
 				}
@@ -400,69 +388,8 @@ func toStruct0(length int, vr ValueReader, value reflect.Value, nesting int) err
 		}
 	}
 
-	// nesting++
-	// for i := 0; i < lth; i++ {
-	// 	fvalue := value.Field(fnames[i].index)
-	// 	if err := valueReader0(vr, fvalue, nesting); err != nil {
-	// 		return err
-	// 	}
-	// }
-
 	return nil
 }
-
-// func skipOneValue(vr ValueReader, nesting int) error {
-// 	th, length, err := vr.ReadHeader()
-// 	if err != nil {
-// 		return err
-// 	}
-// 	return skipValue(th, int(length), vr, nesting)
-// }
-//
-// // 对象的升级是指在原有struct的属性后增加新的字段，删除字段后，要保持剩余字段的原rtlorder值，
-// // 这样当旧版数据恢复到新版类型时，回跳过已删除字段，新增字段保持该对象的原值。
-// // 当把新版数据恢复到旧版类型中时，因为新版数据中被删除的字段被填了空值，这样会使得在新版类型
-// // 已经删除的字段为空值，新版类型增加的字段被跳过，其他值正常恢复。
-// // 这里需要注意的是那些自定义读写规则的类型，他们的写入和读取规则都是非标准的，一旦这样的字段
-// // 被删除或新增，那么就会导致新版类型读取旧版数据或旧版类型读取新版数据时无法正常跳过，导致出
-// // 现无法预测的错误，所以，如果想具有兼容性，就不允许对自定义读写规则的字段进行增删。
-// func skipValue(th TypeHeader, length int, vr ValueReader, nesting int) error {
-// 	if nesting > MaxNested {
-// 		return ErrNestingOverflow
-// 	}
-// 	thv, exist := headerTypeMap[th]
-// 	if !exist {
-// 		return ErrUnsupported
-// 	}
-// 	switch thv.T {
-// 	case THVTByte:
-// 	case THVTSingleHeader, THVTMultiHeader:
-// 		l := uint64(length)
-// 		if thv.T == THVTMultiHeader {
-// 			var err error
-// 			l, err = vr.ReadMultiLength(length)
-// 			if err != nil {
-// 				return err
-// 			}
-// 		}
-// 		if th == THArraySingle || th == THArrayMulti {
-// 			nesting++
-// 			// 跳过多个对象
-// 			for i := uint64(0); i < l; i++ {
-// 				if err := skipOneValue(vr, nesting); err != nil {
-// 					return err
-// 				}
-// 			}
-// 		} else {
-// 			// 跳过多个byte
-// 			_, err := vr.ReadBytes(int(l), nil)
-// 			if err != nil {
-// 				return err
-// 			}
-// 		}
-// 	}
-// 	return nil
-// }
 
 var (
 	// fill in value, which must be a *big.Int
@@ -603,18 +530,6 @@ var (
 			return nil
 		},
 	}
-	// 跳过当前数据
-	skipReaders = map[TypeHeader]typeReaderFunc{
-		THSingleByte: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
-			return nil
-		},
-		THZeroValue: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
-			return nil
-		},
-		THTrue: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
-			return nil
-		},
-	}
 )
 
 func valueReader(r ValueReader, value reflect.Value) error {
@@ -637,7 +552,7 @@ func valueReader0(vr ValueReader, value reflect.Value, nesting int) error {
 		return err
 	}
 
-	return valueReader1(th, int(length), vr, value, nesting)
+	return valueReader1(th, length, vr, value, nesting)
 }
 
 func valueReader1(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
@@ -649,18 +564,18 @@ func valueReader1(th TypeHeader, length int, vr ValueReader, value reflect.Value
 
 	// big.Int or *big.Int
 	if typ.AssignableTo(typeOfBigInt) || typ.AssignableTo(reflect.PtrTo(typeOfBigInt)) {
-		return bigIntReader0(th, int(length), vr, value, nesting)
+		return bigIntReader0(th, length, vr, value, nesting)
 	}
 
 	// big.Rat or *big.Rat
 	if typ.AssignableTo(typeOfBigRat) || typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
-		return bigRatReader0(th, int(length), vr, value, nesting)
+		return bigRatReader0(th, length, vr, value, nesting)
 	}
 
 	// big.Float or *big.Float
 	if typ.AssignableTo(typeOfBigFloat) || typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
 		// if typ.AssignableTo(typeOfBigFloatPtr) {
-		return bigFloatReader0(th, int(length), vr, value, nesting)
+		return bigFloatReader0(th, length, vr, value, nesting)
 	}
 
 	kind := value.Kind()
@@ -732,7 +647,7 @@ func valueReader1(th TypeHeader, length int, vr ValueReader, value reflect.Value
 	default:
 		funcMap, ok := primKindTypeHeaderMap[kind]
 		if ok {
-			return typedReader0(th, int(length), vr, value, nesting, funcMap)
+			return typedReader0(th, length, vr, value, nesting, funcMap)
 		} else {
 			return fmt.Errorf("rtl: unsupported type1 %v (kind: %s, headerType: %s) for decoding", typ, kind, th)
 		}
@@ -754,7 +669,7 @@ func toStructs(typ reflect.Type, kind reflect.Kind, th TypeHeader, length int, v
 	return fmt.Errorf("rtl: unsupported type3 %v (kind: %s, headerType: %s) for decoding", typ, kind, th)
 }
 
-func toPointers(typ reflect.Type, kind reflect.Kind, th TypeHeader, length int, vr ValueReader,
+func toPointers(typ reflect.Type, _ reflect.Kind, th TypeHeader, length int, vr ValueReader,
 	value reflect.Value, nesting int) error {
 	etyp := typ.Elem()
 	if th == THZeroValue {
@@ -862,12 +777,12 @@ func bigIntReader0(th TypeHeader, length int, vr ValueReader, value reflect.Valu
 	// big.Int
 	if typ.AssignableTo(typeOfBigInt) {
 		f := getFunc(typ, bigIntReaders, th)
-		return f(int(length), vr, value.Addr(), nesting)
+		return f(length, vr, value.Addr(), nesting)
 	}
 	// *big.Int
 	if typ.AssignableTo(reflect.PtrTo(typeOfBigInt)) {
 		f := getFunc(typ, bigIntReaders, th)
-		return f(int(length), vr, value, nesting)
+		return f(length, vr, value, nesting)
 	}
 
 	return fmt.Errorf("rtl: should be big.Int or *big.Int, but %s", typ.Name())
@@ -879,12 +794,12 @@ func bigRatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Valu
 	// big.Rat
 	if typ.AssignableTo(typeOfBigRat) {
 		f := getFunc(typ, bigRatReaders, th)
-		return f(int(length), vr, value.Addr(), nesting)
+		return f(length, vr, value.Addr(), nesting)
 	}
 	// *big.Rat
 	if typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
 		f := getFunc(typ, bigRatReaders, th)
-		return f(int(length), vr, value, nesting)
+		return f(length, vr, value, nesting)
 	}
 
 	return fmt.Errorf("rtl: should be big.Rat or *big.Rat, but %s", typ.Name())
@@ -896,12 +811,12 @@ func bigFloatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Va
 	// big.Float
 	if typ.AssignableTo(typeOfBigFloat) {
 		f := getFunc(typ, bigFloatReaders, th)
-		return f(int(length), vr, value.Addr(), nesting)
+		return f(length, vr, value.Addr(), nesting)
 	}
 	// *big.Float
 	if typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
 		f := getFunc(typ, bigFloatReaders, th)
-		return f(int(length), vr, value, nesting)
+		return f(length, vr, value, nesting)
 	}
 
 	return fmt.Errorf("rtl: should be big.Float or *big.Float, but %s", typ.Name())

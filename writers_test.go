@@ -378,6 +378,33 @@ func TestEncode(t *testing.T) {
 	}
 }
 
+// string -> []int
+func TestStringArray(t *testing.T) {
+	s := "this is a string"
+	i := make([]int, 0)
+
+	bs, err := Marshal(s)
+	if err != nil {
+		t.Fatalf("marshal string failed: %v", err)
+	}
+
+	err = Unmarshal(bs, &i)
+	if err != nil {
+		t.Fatalf("unmarshal string to []int failed: %v", err)
+	}
+
+	if len(s) != len(i) {
+		t.Fatalf("len(%s) != len(%d)", s, i)
+	}
+	sb := []byte(s)
+	for j := 0; j < len(s); j++ {
+		if int(sb[j]) != i[j] {
+			t.Fatalf("%d != %d", sb, i)
+		}
+	}
+	t.Logf("string (%s) -> %x -> []int %d", s, bs, i)
+}
+
 type version1 struct {
 	A uint
 	B uint

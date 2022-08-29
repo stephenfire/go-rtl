@@ -51,6 +51,9 @@ func (thvalue THValue) WithNumber(b byte) byte {
 type TypeHeader byte
 
 func (th TypeHeader) Name() string {
+	if th == THInvalid {
+		return "N/A"
+	}
 	thv, ok := headerTypeMap[th]
 	if ok {
 		return thv.N
@@ -179,20 +182,20 @@ var (
 
 	// header constants
 	headerTypeMap = map[TypeHeader]THValue{
-		THSingleByte:    {"SingleByte", 0x00, 0x80, ^byte(0x80), THVTByte, false},
-		THZeroValue:     {"ZeroValue", 0x80, 0xFF, 0x00, THVTByte, false},
+		THSingleByte:    {"Byte", 0x00, 0x80, ^byte(0x80), THVTByte, false},
+		THZeroValue:     {"Zero", 0x80, 0xFF, 0x00, THVTByte, false},
 		THTrue:          {"True", 0x81, 0xFF, 0x00, THVTByte, false},
 		THEmpty:         {"Empty", 0x82, 0xFF, 0x00, THVTByte, false},
-		THArraySingle:   {"SmallArray", 0x90, 0xF0, ^byte(0xF0), THVTSingleHeader, true},
-		THArrayMulti:    {"Array", 0x88, 0xF8, ^byte(0xF8), THVTMultiHeader, true},
-		THPosNumSingle:  {"PositiveNumberSingleByte", 0xA0, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
-		THNegNumSingle:  {"NegativeNumberSingleByte", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
-		THPosBigInt:     {"PositiveNumberMultiBytes", 0xB0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THNegBigInt:     {"NegativeNumberMultiBytes", 0xB8, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THStringSingle:  {"StringSingleByte", 0xC0, 0xE0, ^byte(0xE0), THVTSingleHeader, false},
-		THStringMulti:   {"StringMultiBytes", 0xE0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THVersion:       {"VersionByte", 0xF0, 0xF0, ^byte(0xF0), THVTByte, false},
-		THVersionSingle: {"VersionSingleByte", 0xE8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
+		THArraySingle:   {"Array", 0x90, 0xF0, ^byte(0xF0), THVTSingleHeader, true},
+		THArrayMulti:    {"Array+", 0x88, 0xF8, ^byte(0xF8), THVTMultiHeader, true},
+		THPosNumSingle:  {"PosNum", 0xA0, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
+		THNegNumSingle:  {"NegNum", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
+		THPosBigInt:     {"PosNum+", 0xB0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
+		THNegBigInt:     {"NegNum+", 0xB8, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
+		THStringSingle:  {"String", 0xC0, 0xE0, ^byte(0xE0), THVTSingleHeader, false},
+		THStringMulti:   {"String+", 0xE0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
+		THVersion:       {"Ver", 0xF0, 0xF0, ^byte(0xF0), THVTByte, false},
+		THVersionSingle: {"Ver+", 0xE8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
 	}
 
 	// primitive kind to valid TypeHeaders
@@ -231,6 +234,9 @@ var (
 	ErrTooLarge           = errors.New("too large to create")
 	ErrDecodeIntoNil      = errors.New("rtl: decode pointer MUST NOT be nil")
 	ErrDecodeNoPtr        = errors.New("rtl: value being decode MUST be a pointer")
+
+	ErrEmptyStack   = errors.New("rtl: stack is empty")
+	ErrInvalidValue = errors.New("invalid reflect.Value")
 )
 
 type headMaker struct{}

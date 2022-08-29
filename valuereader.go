@@ -20,11 +20,13 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 )
 
 type ValueReader interface {
 	HasMore() bool
-	ReadHeader() (TypeHeader, uint32, error)
+	ReadHeader() (TypeHeader, int, error)
+	ReadFullHeader() (TypeHeader, int, error)
 	io.ByteReader
 	io.Reader
 	ReadBytes(length int, buf []byte) ([]byte, error)
@@ -64,7 +66,7 @@ func (r *defaultVR) left() int {
 	return r.readerSize - r.readCount
 }
 
-func (r *defaultVR) ReadHeader() (TypeHeader, uint32, error) {
+func (r *defaultVR) ReadHeader() (TypeHeader, int, error) {
 	if !r.HasMore() {
 		return 0, 0, io.EOF
 	}
@@ -73,6 +75,25 @@ func (r *defaultVR) ReadHeader() (TypeHeader, uint32, error) {
 		return 0, 0, r.filterErr(err)
 	}
 	return ParseRTLHeader(b)
+}
+
+func (r *defaultVR) ReadFullHeader() (TypeHeader, int, error) {
+	th, length, err := r.ReadHeader()
+	if err != nil {
+		return 0, 0, err
+	}
+	if vt, exist := th.ValueType(); exist && vt == THVTMultiHeader {
+		l, err := r.ReadMultiLength(length)
+		if err != nil {
+			return 0, 0, err
+		}
+		if l > math.MaxInt {
+			return 0, 0, errors.New("full length overflow")
+		}
+		return th, int(l), nil
+	} else {
+		return th, length, nil
+	}
 }
 
 func (r *defaultVR) ReadByte() (byte, error) {
@@ -173,10 +194,10 @@ func (r *defaultVR) Skip() (int, error) {
 		if !exist {
 			return errors.New("invalid value type of the type header")
 		}
-		size := int(length)
+		size := length
 		if vt == THVTMultiHeader {
-			ml, err := r.ReadMultiLength(int(length))
-			skiped += int(length)
+			ml, err := r.ReadMultiLength(length)
+			skiped += length
 			if err != nil {
 				return err
 			}
@@ -222,188 +243,22 @@ func (r *defaultVR) Skip() (int, error) {
 	return skiped, nil
 }
 
-// type bufValueReader struct {
-// 	reader     io.Reader // basic reader
-// 	eof        bool      // if the reader EOF
-// 	lastError  error     // error of last reading(if exist, except io.EOF)
-// 	buffer     []byte    // buffered bytes
-// 	available  uint32    // length of available bytes in buffer
-// 	offset     uint32    // offset for buffer of reading
-// 	readCount  int       // counting the read bytes
-// 	readerSize int       // summary size of the reader, if it's a stream, set to MaxSliceSize
-// }
-//
-// func (r *bufValueReader) ResetCount() {
-// 	r.readCount = 0
-// }
-//
-// func (r bufValueReader) ReadCount() int {
-// 	return r.readCount
-// }
-//
-// func (r *bufValueReader) HasMore() bool {
-// 	if r.available > r.offset {
-// 		return true
-// 	}
-// 	return r.next()
-// }
-//
-// func (r *bufValueReader) left() int {
-// 	return r.readerSize - r.readCount
-// }
-//
-// // next read more bytes to buffer when buffer is empty,
-// // and return if it has more bytes in buffer
-// func (r *bufValueReader) next() bool {
-// 	if r.available > r.offset {
-// 		return true
-// 	}
-//
-// 	if r.eof || r.lastError != nil {
-// 		return false
-// 	}
-//
-// 	r.offset = 0
-// 	r.available = 0
-// 	for {
-// 		n, err := r.reader.Read(r.buffer)
-// 		if n > 0 {
-// 			r.available = uint32(n)
-// 		}
-// 		if err != nil {
-// 			if err == io.EOF {
-// 				r.eof = true
-// 			} else {
-// 				r.lastError = err
-// 			}
-// 			break
-// 		}
-// 		if n > 0 {
-// 			break
-// 		}
-// 	}
-// 	return r.available > 0
-// }
-//
-// func (r *bufValueReader) forward(count int) {
-// 	r.offset += uint32(count)
-// 	r.readCount += count
-// }
-//
-// // GetHeader get 1 byte from buffer, parse the byte to (TypeHeader, length)
-// // if THSingleByte, length will be the byte value.
-// // if THZeroValue/THTrue, length will be 0
-// // if TypeHeader is a single byte header, length will be the length of the content
-// // if TypeHeader is a multi bytes header, length will be the length of the length of the content
-// // if anything goes wrong, error will not be nil, and (TypeHeader, length) are all meaningless
-// func (r *bufValueReader) getHeader() (TypeHeader, uint32, error) {
-// 	if !r.HasMore() {
-// 		if r.lastError != nil {
-// 			return 0, 0, r.lastError
-// 		}
-// 		return 0, 0, io.EOF
-// 	}
-// 	b := r.buffer[r.offset]
-// 	return ParseRTLHeader(b)
-// }
-//
-// // ReadHeader GetHeader and move 1byte forward if success
-// func (r *bufValueReader) ReadHeader() (TypeHeader, uint32, error) {
-// 	th, l, err := r.getHeader()
-// 	if err == nil {
-// 		r.offset++
-// 		r.readCount++
-// 	}
-// 	return th, l, err
-// }
-//
-// func (r *bufValueReader) ReadByte() (byte, error) {
-// 	if !r.HasMore() {
-// 		if r.lastError != nil {
-// 			return 0, r.lastError
-// 		}
-// 		return 0, io.EOF
-// 	}
-// 	b := r.buffer[r.offset]
-// 	r.offset++
-// 	r.readCount++
-// 	return b, nil
-// }
-//
-// func (r *bufValueReader) Read(p []byte) (int, error) {
-// 	if !r.HasMore() {
-// 		if r.lastError != nil {
-// 			return 0, r.lastError
-// 		}
-// 		return 0, io.EOF
-// 	}
-//
-// 	// copy buffer to p
-// 	n := copy(p, r.buffer[r.offset:r.available])
-// 	r.offset += uint32(n)
-// 	r.readCount += n
-// 	if n >= len(p) {
-// 		return n, nil
-// 	}
-//
-// 	// read until fill full p or reader reach EOF
-// 	ret := n
-// 	for {
-// 		if r.next() == false {
-// 			// no more data
-// 			if r.lastError != nil {
-// 				return ret, r.lastError
-// 			}
-// 			return ret, io.EOF
-// 		}
-// 		n = copy(p[ret:], r.buffer[r.offset:r.available])
-// 		ret += n
-// 		r.offset += uint32(n)
-// 		r.readCount += n
-// 		if ret >= len(p) {
-// 			return ret, nil
-// 		}
-// 	}
-// }
-//
-// // ReadBytes read length bytes and return a slice, if parameter bytes length not
-// // sufficient, will create a new slice
-// func (r *bufValueReader) ReadBytes(length int, buf []byte) ([]byte, error) {
-// 	return ReadBytesFromReader(r, length, buf)
-// }
-//
-// // ReadMultiLength read length of multi bytes' header value's length
-// func (r *bufValueReader) ReadMultiLength(length int) (uint64, error) {
-// 	ret, err := ReadMultiLengthFromReader(r, length)
-// 	if err != nil {
-// 		return 0, err
-// 	}
-// 	left := r.left()
-// 	if left <= 0 || ret > uint64(left) {
-// 		return 0, fmt.Errorf("%d bytes multi-length(%d) is larger than left(%d)", length, ret, left)
-// 	}
-// 	return ret, nil
-// }
-//
-// func (r *bufValueReader) ReadMultiLengthBytes(length int, buf []byte) ([]byte, error) {
-// 	return ReadMultiLengthBytesFromReader(r, length, buf)
-// }
-
-func ParseRTLHeader(b byte) (TypeHeader, uint32, error) {
+func ParseRTLHeader(b byte) (TypeHeader, int, error) {
 	for th, thv := range headerTypeMap {
 		if thv.Match(b) {
 			switch thv.T {
 			case THVTByte:
-				return th, uint32(b & thv.W), nil
+				return th, int(b & thv.W), nil
 			case THVTSingleHeader, THVTMultiHeader:
-				l := uint32(b & thv.W)
+				l := int(b & thv.W)
 				if l == 0 {
-					l = uint32(thv.W + 1)
+					l = int(thv.W + 1)
 				}
 				return th, l, nil
 			default:
 				// should not be here
-				panic("unknown type")
+				// panic("unknown type")
+				return THInvalid, 0, errors.New("unknown type")
 			}
 		}
 	}
@@ -466,21 +321,10 @@ func NewValueReader(r io.Reader, _ ...int) ValueReader {
 	if ok {
 		l = lenner.Len()
 	}
-	// if bufferSize > 0 {
-	// 	return &bufValueReader{
-	// 		reader:     r,
-	// 		eof:        false,
-	// 		buffer:     make([]byte, bufferSize),
-	// 		available:  0,
-	// 		offset:     0,
-	// 		readerSize: l,
-	// 	}
-	// } else {
 	return &defaultVR{
 		reader:     r,
 		eof:        false,
 		readCount:  0,
 		readerSize: l,
 	}
-	// }
 }

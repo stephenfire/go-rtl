@@ -147,7 +147,7 @@ func (n numeric) UintToBytes(i uint64) []byte {
 func (n numeric) IntToBytes(i int64) (isNegative bool, buf []byte) {
 	isNegative = i < 0
 	if isNegative {
-		i = -i
+		i = -i // not changed if i==MinInt64
 	}
 	buf = n.UintToBytes(uint64(i))
 	return
@@ -182,7 +182,7 @@ func (n numeric) BigIntToBytes(bi *big.Int) (isNegative bool, buf []byte) {
 func (numeric) bytesToUint(b []byte, n int) uint64 {
 	var r uint64 = 0
 	l := len(b)
-	if b != nil && l > 0 {
+	if l > 0 {
 		s := l - n
 		if s < 0 {
 			s = 0
@@ -214,6 +214,23 @@ func (numeric) BytesToUint8(b []byte) uint8 {
 	return uint8(b[len(b)-1])
 }
 
+func (n numeric) BytesToIntB(b []byte) (int, bool) {
+	if len(b) == 0 {
+		return 0, false
+	}
+	bytesize := (32 << (^uint(0) >> 63)) >> 3
+	if len(b) > bytesize {
+		return 0, true
+	}
+	var r uint = 0
+	for i := 0; i < len(b); i++ {
+		r <<= 8
+		r += uint(b[i])
+	}
+	return int(r), false
+}
+
+// Deprecated use BytesToIntB instead
 func (n numeric) BytesToInt(b []byte) int {
 	if len(b) == 0 {
 		return 0
@@ -226,6 +243,19 @@ func (n numeric) BytesToInt(b []byte) int {
 	return r
 }
 
+// if overflowed return (0, true), or return int64 value and false
+func (n numeric) BytesToInt64B(b []byte, isNegative bool) (int64, bool) {
+	r := n.bytesToUint(b, 8)
+	if !isNegative && r > math.MaxInt64 {
+		return 0, true
+	}
+	i := int64(r)
+	if isNegative {
+		i = -i
+	}
+	return i, false
+}
+
 func (n numeric) BytesToInt64(b []byte, isNegative bool) int64 {
 	r := int64(n.bytesToUint(b, 8))
 	if isNegative && r > 0 {
@@ -234,6 +264,19 @@ func (n numeric) BytesToInt64(b []byte, isNegative bool) int64 {
 	return r
 }
 
+func (n numeric) BytesToInt32B(b []byte, isNegative bool) (int32, bool) {
+	r := n.bytesToUint(b, 4)
+	if !isNegative && r > math.MaxInt32 {
+		return 0, true
+	}
+	i := int32(r)
+	if isNegative {
+		i = -i
+	}
+	return i, false
+}
+
+// Deprecated use BytesToInt32B instead
 func (n numeric) BytesToInt32(b []byte, isNegative bool) int32 {
 	r := int32(n.bytesToUint(b, 4))
 	if isNegative && r > 0 {
@@ -242,6 +285,19 @@ func (n numeric) BytesToInt32(b []byte, isNegative bool) int32 {
 	return r
 }
 
+func (n numeric) BytesToInt16B(b []byte, isNegative bool) (int16, bool) {
+	r := n.bytesToUint(b, 2)
+	if !isNegative && r > math.MaxInt16 {
+		return 0, true
+	}
+	i := int16(r)
+	if isNegative {
+		i = -i
+	}
+	return i, false
+}
+
+// Deprecated use BytesToInt16B instead
 func (n numeric) BytesToInt16(b []byte, isNegative bool) int16 {
 	r := int16(n.bytesToUint(b, 2))
 	if isNegative && r > 0 {
@@ -250,6 +306,22 @@ func (n numeric) BytesToInt16(b []byte, isNegative bool) int16 {
 	return r
 }
 
+func (n numeric) BytesToInt8B(b []byte, isNegative bool) (int8, bool) {
+	if len(b) == 0 {
+		return 0, false
+	}
+	r := uint8(b[len(b)-1])
+	if !isNegative && r > math.MaxInt8 {
+		return 0, true
+	}
+	i := int8(r)
+	if isNegative {
+		i = -i
+	}
+	return i, false
+}
+
+// Deprecated use BytesToInt8B instead
 func (n numeric) BytesToInt8(b []byte, isNegative bool) int8 {
 	if b == nil || len(b) == 0 {
 		return 0
@@ -301,12 +373,9 @@ func (n numeric) BytesFillBigInt(b []byte, isNegative bool, bi *big.Int) {
 		bi.SetInt64(0)
 		return
 	}
+	bi.SetBytes(b)
 	if isNegative {
-		bbi := new(big.Int)
-		bbi.SetBytes(b)
-		bi.Neg(bbi)
-	} else {
-		bi.SetBytes(b)
+		bi.Neg(bi)
 	}
 }
 

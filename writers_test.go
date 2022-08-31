@@ -209,18 +209,10 @@ var encTests = []param{
 	{val: big.NewInt(0xFFFFFFFFFF)},
 	{val: big.NewInt(0xFFFFFFFFFFFF)},
 	{val: big.NewInt(0xFFFFFFFFFFFFFF)},
-	{
-		val: big.NewInt(0).SetBytes(Unhex("102030405060708090A0B0C0D0E0F2")),
-	},
-	{
-		val: big.NewInt(0).SetBytes(Unhex("0100020003000400050006000700080009000A000B000C000D000E01")),
-	},
-	{
-		val: big.NewInt(0).SetBytes(Unhex("010000000000000000000000000000000000000000000000000000000000000000")),
-	},
-	{
-		val: big.NewInt(0).Sub(big.NewInt(0), big.NewInt(0).SetBytes(Unhex("0100020003000400050006000700080009000A000B000C000D000E01"))),
-	},
+	{val: big.NewInt(0).SetBytes(Unhex("102030405060708090A0B0C0D0E0F2"))},
+	{val: big.NewInt(0).SetBytes(Unhex("0100020003000400050006000700080009000A000B000C000D000E01"))},
+	{val: big.NewInt(0).SetBytes(Unhex("010000000000000000000000000000000000000000000000000000000000000000"))},
+	{val: big.NewInt(0).Sub(big.NewInt(0), big.NewInt(0).SetBytes(Unhex("0100020003000400050006000700080009000A000B000C000D000E01")))},
 
 	// non-pointer big.Int
 	{val: *big.NewInt(0)},
@@ -349,24 +341,26 @@ var encTests = []param{
 }
 
 func TestEncode(t *testing.T) {
-	buf := new(bytes.Buffer)
+	decoder := new(EventDecoder)
 	for _, test := range encTests {
 		val := reflect.ValueOf(test.val)
-		buf.Reset()
-		// valueWriter(buf, val)
-		Encode(test.val, buf)
-		bs := buf.Bytes()
-		// fmt.Println(test.val, "->", hex.EncodeToString(buf.Bytes()))
-
+		bs, err := Marshal(test.val)
+		if err != nil {
+			t.Fatal(err)
+		}
+		buf := bytes.NewBuffer(bs)
 		typ := val.Type()
 		nv := reflect.New(typ)
 		// vr := NewValueReader(buf, 100)
 		nvv := nv.Elem()
 		// if err := valueReader(vr, nvv); err != nil {
 		// vr := NewValueReader(buf, 256)
-		vr := buf
-		if err := Decode(vr, nv.Interface()); err != nil {
+		if err := Decode(buf, nv.Interface()); err != nil {
 			t.Error(err)
+		}
+		buf = bytes.NewBuffer(bs)
+		if err := decoder.Decode(buf, nv.Interface()); err != nil {
+			t.Fatal(err)
 		}
 
 		fmt.Printf("%v: %#v\n\t%X\n%v: %#v\n", typ, test.val, bs, nvv.Type(), nvv)

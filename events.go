@@ -78,6 +78,7 @@ func (s *handleState) updateValue(val reflect.Value) error {
 		return errors.New("invalid updating state value when state in handling")
 	}
 	s.val = val
+	s.typ = val.Type()
 	return nil
 }
 
@@ -179,6 +180,7 @@ func (ctx *HandleContext) apply(todo *Todo) error {
 		if len(ctx.stack) == 0 {
 			return ErrEmptyStack
 		}
+		ctx.stack = ctx.stack[:len(ctx.stack)-1]
 	}
 
 	switch todo.DataTodo {
@@ -354,8 +356,7 @@ type EventDecoder struct {
 	typeHandlers map[reflect.Type]HeaderHandler
 }
 
-func (e *EventDecoder) runDecoder(r io.Reader, value reflect.Value) (bool, error) {
-	typ := value.Type()
+func (e *EventDecoder) runDecoder(r io.Reader, value reflect.Value, typ reflect.Type) (bool, error) {
 	if typ.Implements(TypeOfDecoder) {
 		newCreate := false
 		if typ.Kind() == reflect.Ptr && value.IsNil() {
@@ -378,14 +379,15 @@ func (e *EventDecoder) runDecoder(r io.Reader, value reflect.Value) (bool, error
 }
 
 func (e *EventDecoder) checkTypeOfDecoder(r io.Reader, value reflect.Value) (bool, error) {
-	isDecoder, err := e.runDecoder(r, value)
+	typ := value.Type()
+	isDecoder, err := e.runDecoder(r, value, typ)
 	if isDecoder || err != nil {
 		return isDecoder, err
 	}
-	typ := value.Type()
 	if typ.Kind() == reflect.Ptr {
+		etyp := typ.Elem()
 		elem := value.Elem()
-		return e.runDecoder(r, elem)
+		return e.runDecoder(r, elem, etyp)
 	}
 	return false, nil
 }
@@ -454,6 +456,14 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 				}
 				state.th = th
 				state.length = length
+
+				if th.FollowedByBytes() {
+					buf, err := ctx.vr.ReadBytes(state.length, nil)
+					if err != nil {
+						return fmt.Errorf("rtl: read value failed: %v, at %s", err, ctx.StackInfo())
+					}
+					state.buf = buf
+				}
 			}
 
 			handler, err := e._getTypeHandler(state.typ)
@@ -461,7 +471,7 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 				return fmt.Errorf("rtl: get handler for type %s failed: %v", state.typ.Name(), err)
 			}
 			if handler == nil {
-				handler, err := e._getKindHandler(state.typ.Kind())
+				handler, err = e._getKindHandler(state.typ.Kind())
 				if err != nil || handler == nil {
 					return fmt.Errorf("rtl: get handler for type:%s, kind:%s failed: %v",
 						state.typ.Name(), state.typ.Kind(), err)
@@ -480,27 +490,13 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 			case THArraySingle, THArrayMulti:
 				todo, err = handler.Array(state.val, state.length)
 			case THPosNumSingle, THNegNumSingle, THPosBigInt, THNegBigInt:
-				buf, err := ctx.vr.ReadBytes(state.length, nil)
-				if err == nil {
-					state.buf = buf
-					todo, err = handler.Number(state.val, state.th == THPosNumSingle || state.th == THPosBigInt, buf)
-				}
+				todo, err = handler.Number(state.val, state.th == THPosNumSingle || state.th == THPosBigInt, state.buf)
 			case THStringSingle, THStringMulti:
-				buf, err := ctx.vr.ReadBytes(state.length, nil)
-				if err != nil {
-					return err
-				}
-				state.buf = buf
-				todo, err = handler.Bytes(state.val, buf)
+				todo, err = handler.Bytes(state.val, state.buf)
 			case THVersion:
 				todo, err = handler.Version(state.val, byte(state.length))
 			case THVersionSingle:
-				buf, err := ctx.vr.ReadBytes(state.length, nil)
-				if err != nil {
-					return err
-				}
-				state.buf = buf
-				todo, err = handler.Version(state.val, buf...)
+				todo, err = handler.Version(state.val, state.buf...)
 			}
 
 			if err != nil {
@@ -520,12 +516,19 @@ func (e *EventDecoder) Decode(r io.Reader, obj interface{}) error {
 	}
 
 	rv := reflect.ValueOf(obj)
-	if !rv.CanSet() {
+	if rv.Kind() != reflect.Ptr {
+		return ErrDecodeNoPtr
+	}
+	if rv.IsNil() {
+		return ErrDecodeIntoNil
+	}
+	rev := rv.Elem()
+	if !rev.CanSet() {
 		return errors.New("obj cannot set")
 	}
-	rtyp := rv.Type()
+	rtyp := rev.Type()
 	rkind := rtyp.Kind()
-	if !canBeDecodeTo(rv.Kind()) {
+	if !canBeDecodeTo(rkind) {
 		return fmt.Errorf("unsupported decoding to %v (kind: %s)", rtyp, rkind.String())
 	}
 
@@ -535,7 +538,7 @@ func (e *EventDecoder) Decode(r io.Reader, obj interface{}) error {
 	}
 
 	ctx := &HandleContext{vr: vr}
-	state, err := newState(rv)
+	state, err := newState(rev)
 	if err != nil {
 		return err
 	}

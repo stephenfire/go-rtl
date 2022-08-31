@@ -19,6 +19,7 @@ package rtl
 import (
 	"errors"
 	"fmt"
+	"math/big"
 	"reflect"
 )
 
@@ -50,7 +51,10 @@ type (
 	sliceHandler struct {
 		DefaultHeaderHandler
 	}
-	pointerHandler struct{}
+	pointerHandler   struct{}
+	interfaceHandler struct {
+		DefaultHeaderHandler
+	}
 )
 
 func init() {
@@ -64,6 +68,7 @@ func init() {
 	_systemKindHandler(arrayHandler{}, reflect.Array)
 	_systemKindHandler(sliceHandler{}, reflect.Slice)
 	_systemKindHandler(pointerHandler{}, reflect.Ptr)
+	_systemKindHandler(interfaceHandler{}, reflect.Interface)
 }
 
 func (intHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
@@ -194,26 +199,7 @@ func (structHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	}, nil
 }
 
-func (arrayHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
-	if value.Len() >= 1 {
-		evalue := value.Index(0)
-		return &Todo{
-			StackTodo: StackPush,
-			Val:       evalue,
-			Th:        THSingleByte,
-			Length:    int(input),
-		}, nil
-	} else {
-		return nil, nil
-	}
-}
-
-func (arrayHandler) Zero(value reflect.Value) (*Todo, error) {
-	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
-}
-
-func (arrayHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+func (a arrayHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
 		reflect.Copy(value, reflect.ValueOf(inputs))
@@ -230,7 +216,20 @@ func (arrayHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
 	}
 }
 
-func (arrayHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (a arrayHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+	return a._bytes(value, input)
+}
+
+func (a arrayHandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(value.Type()))
+	return popTodo.Clone(), nil
+}
+
+func (a arrayHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+	return a._bytes(value, inputs...)
+}
+
+func (a arrayHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	nested, err := newArrayElement(value, length)
 	if err != nil {
 		return nil, fmt.Errorf("new array nested handler failed: %v", err)
@@ -241,31 +240,7 @@ func (arrayHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	}, nil
 }
 
-func (sliceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
-	checkSlice0(1, value)
-	evalue := value.Index(0)
-	return &Todo{
-		StackTodo: StackPush,
-		Val:       evalue,
-		Th:        THSingleByte,
-		Length:    int(input),
-	}, nil
-}
-
-func (sliceHandler) Zero(value reflect.Value) (*Todo, error) {
-	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
-}
-
-func (sliceHandler) Empty(value reflect.Value) (*Todo, error) {
-	if value.CanSet() {
-		nslice := reflect.MakeSlice(value.Type(), 0, 0)
-		value.Set(nslice)
-	}
-	return popTodo.Clone(), nil
-}
-
-func (sliceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+func (s sliceHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
 	checkSlice0(len(inputs), value)
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
@@ -283,7 +258,28 @@ func (sliceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
 	}
 }
 
-func (sliceHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (s sliceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+	return s._bytes(value, input)
+}
+
+func (s sliceHandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(value.Type()))
+	return popTodo.Clone(), nil
+}
+
+func (s sliceHandler) Empty(value reflect.Value) (*Todo, error) {
+	if value.CanSet() {
+		nslice := reflect.MakeSlice(value.Type(), 0, 0)
+		value.Set(nslice)
+	}
+	return popTodo.Clone(), nil
+}
+
+func (s sliceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+	return s._bytes(value, inputs...)
+}
+
+func (s sliceHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	nested, err := newSliceElement(value, length)
 	if err != nil {
 		return nil, fmt.Errorf("new slice nested handler failed: %v", err)
@@ -329,6 +325,7 @@ func (p pointerHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
 }
 
 func (p pointerHandler) Zero(value reflect.Value) (*Todo, error) {
+	// return p._handle(value)
 	if !value.IsNil() {
 		value.Set(reflect.Zero(value.Type()))
 	}
@@ -357,4 +354,61 @@ func (p pointerHandler) Bytes(value reflect.Value, _ []byte) (*Todo, error) {
 
 func (p pointerHandler) Version(value reflect.Value, _ ...byte) (*Todo, error) {
 	return p._handle(value)
+}
+
+func (interfaceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+	nv := reflect.New(typeOfUint64).Elem()
+	nv.SetUint(uint64(input))
+	value.Set(nv)
+	return popTodo.Clone(), nil
+}
+
+func (interfaceHandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(typeOfInterface))
+	return popTodo.Clone(), nil
+}
+
+func (interfaceHandler) Empty(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.MakeSlice(typeOfInterfaceSlice, 0, 0))
+	return popTodo.Clone(), nil
+}
+
+func (interfaceHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+	l := len(inputs)
+	if l <= 8 {
+		if !isPositive {
+			i := Numeric.BytesToInt64(inputs, !isPositive)
+			nv := reflect.New(typeOfInt64).Elem()
+			nv.SetInt(i)
+			value.Set(nv)
+		} else {
+			u := Numeric.BytesToUint64(inputs)
+			nv := reflect.New(typeOfUint64).Elem()
+			nv.SetUint(u)
+			value.Set(nv)
+		}
+	} else {
+		i := new(big.Int).SetBytes(inputs)
+		if !isPositive {
+			i.Neg(i)
+		}
+		value.Set(reflect.ValueOf(i))
+	}
+	return popTodo.Clone(), nil
+}
+
+func (interfaceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+	nv := reflect.New(typeOfString).Elem()
+	nv.SetString(string(inputs))
+	value.Set(nv)
+	return popTodo.Clone(), nil
+}
+
+func (interfaceHandler) Array(value reflect.Value, size int) (*Todo, error) {
+	slice := reflect.MakeSlice(typeOfInterfaceSlice, size, size)
+	value.Set(slice)
+	return &Todo{
+		StackTodo: StackReplaceTop,
+		Val:       slice,
+	}, nil
 }

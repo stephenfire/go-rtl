@@ -37,7 +37,8 @@ type THValue struct {
 	M byte        // mask
 	W byte        // wildcard mask
 	T THValueType // type of the header
-	X bool        // if the type is a nested type, which means there's should be another header follow the current header
+	B bool        // whether the header is followed by value bytes
+	X bool        // whether the type is a nested type, which means there's should be another header follow the current header
 }
 
 func (thvalue THValue) Match(b byte) bool {
@@ -83,6 +84,22 @@ func (th TypeHeader) ValueType() (THValueType, bool) {
 		return thv.T, true
 	}
 	return THVTInvalid, false
+}
+
+func (th TypeHeader) FollowedByHeader() bool {
+	thv, ok := headerTypeMap[th]
+	if ok {
+		return !thv.B
+	}
+	return false
+}
+
+func (th TypeHeader) FollowedByBytes() bool {
+	thv, ok := headerTypeMap[th]
+	if ok {
+		return thv.B
+	}
+	return false
 }
 
 const (
@@ -182,20 +199,20 @@ var (
 
 	// header constants
 	headerTypeMap = map[TypeHeader]THValue{
-		THSingleByte:    {"Byte", 0x00, 0x80, ^byte(0x80), THVTByte, false},
-		THZeroValue:     {"Zero", 0x80, 0xFF, 0x00, THVTByte, false},
-		THTrue:          {"True", 0x81, 0xFF, 0x00, THVTByte, false},
-		THEmpty:         {"Empty", 0x82, 0xFF, 0x00, THVTByte, false},
-		THArraySingle:   {"Array", 0x90, 0xF0, ^byte(0xF0), THVTSingleHeader, true},
-		THArrayMulti:    {"Array+", 0x88, 0xF8, ^byte(0xF8), THVTMultiHeader, true},
-		THPosNumSingle:  {"PosNum", 0xA0, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
-		THNegNumSingle:  {"NegNum", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
-		THPosBigInt:     {"PosNum+", 0xB0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THNegBigInt:     {"NegNum+", 0xB8, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THStringSingle:  {"String", 0xC0, 0xE0, ^byte(0xE0), THVTSingleHeader, false},
-		THStringMulti:   {"String+", 0xE0, 0xF8, ^byte(0xF8), THVTMultiHeader, false},
-		THVersion:       {"Ver", 0xF0, 0xF0, ^byte(0xF0), THVTByte, false},
-		THVersionSingle: {"Ver+", 0xE8, 0xF8, ^byte(0xF8), THVTSingleHeader, false},
+		THSingleByte:    {"Byte", 0x00, 0x80, ^byte(0x80), THVTByte, false, false},
+		THZeroValue:     {"Zero", 0x80, 0xFF, 0x00, THVTByte, false, false},
+		THTrue:          {"True", 0x81, 0xFF, 0x00, THVTByte, false, false},
+		THEmpty:         {"Empty", 0x82, 0xFF, 0x00, THVTByte, false, false},
+		THArraySingle:   {"Array", 0x90, 0xF0, ^byte(0xF0), THVTSingleHeader, false, true},
+		THArrayMulti:    {"Array+", 0x88, 0xF8, ^byte(0xF8), THVTMultiHeader, false, true},
+		THPosNumSingle:  {"PosNum", 0xA0, 0xF8, ^byte(0xF8), THVTSingleHeader, true, false},
+		THNegNumSingle:  {"NegNum", 0xA8, 0xF8, ^byte(0xF8), THVTSingleHeader, true, false},
+		THPosBigInt:     {"PosNum+", 0xB0, 0xF8, ^byte(0xF8), THVTMultiHeader, true, false},
+		THNegBigInt:     {"NegNum+", 0xB8, 0xF8, ^byte(0xF8), THVTMultiHeader, true, false},
+		THStringSingle:  {"String", 0xC0, 0xE0, ^byte(0xE0), THVTSingleHeader, true, false},
+		THStringMulti:   {"String+", 0xE0, 0xF8, ^byte(0xF8), THVTMultiHeader, true, false},
+		THVersion:       {"Ver", 0xF0, 0xF0, ^byte(0xF0), THVTByte, false, false},
+		THVersionSingle: {"Ver+", 0xE8, 0xF8, ^byte(0xF8), THVTSingleHeader, false, false},
 	}
 
 	// primitive kind to valid TypeHeaders

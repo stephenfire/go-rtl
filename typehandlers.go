@@ -19,27 +19,48 @@ package rtl
 import "reflect"
 
 type (
-	bigintHandler struct {
+	addressHandler struct{}
+	bigintHandler  struct {
+		addressHandler
+		DefaultHeaderHandler
+	}
+	bigintPtrhandler struct {
 		DefaultHeaderHandler
 	}
 	bigratHandler struct {
+		addressHandler
+		DefaultHeaderHandler
+	}
+	bigratPtrHandler struct {
 		DefaultHeaderHandler
 	}
 	bigfloatHandler struct {
+		addressHandler
+		DefaultHeaderHandler
+	}
+	bigfloatPtrHandler struct {
 		DefaultHeaderHandler
 	}
 )
 
 func init() {
-	_systemTypeHandler(bigintHandler{}, typeOfBigInt, reflect.PtrTo(typeOfBigInt))
-	_systemTypeHandler(bigratHandler{}, typeOfBigRat, reflect.PtrTo(typeOfBigRat))
-	_systemTypeHandler(bigfloatHandler{}, typeOfBigFloat, reflect.PtrTo(typeOfBigFloat))
+	_systemTypeHandler(bigintHandler{}, typeOfBigInt)
+	_systemTypeHandler(bigintPtrhandler{}, reflect.PtrTo(typeOfBigInt))
+	_systemTypeHandler(bigratHandler{}, typeOfBigRat)
+	_systemTypeHandler(bigratPtrHandler{}, reflect.PtrTo(typeOfBigRat))
+	_systemTypeHandler(bigfloatHandler{}, typeOfBigFloat)
+	_systemTypeHandler(bigfloatPtrHandler{}, reflect.PtrTo(typeOfBigFloat))
 }
 
-func (bigintHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
-	i := getOrNewBigInt(value)
-	i.SetInt64(int64(input))
-	return popTodo.Clone(), nil
+func (addressHandler) _replace(value reflect.Value) (*Todo, error) {
+	return &Todo{
+		StackTodo: StackReplaceTop,
+		Val:       value.Addr(),
+	}, nil
+}
+
+func (b bigintHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
+	return b._replace(value)
 }
 
 func (bigintHandler) Zero(value reflect.Value) (*Todo, error) {
@@ -47,7 +68,22 @@ func (bigintHandler) Zero(value reflect.Value) (*Todo, error) {
 	return popTodo.Clone(), nil
 }
 
-func (bigintHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (b bigintHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
+	return b._replace(value)
+}
+
+func (bigintPtrhandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+	i := getOrNewBigInt(value)
+	i.SetInt64(int64(input))
+	return popTodo.Clone(), nil
+}
+
+func (bigintPtrhandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(value.Type()))
+	return popTodo.Clone(), nil
+}
+
+func (bigintPtrhandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
 	i := getOrNewBigInt(value)
 	i.SetBytes(inputs)
 	if !isPositive {
@@ -61,7 +97,16 @@ func (bigratHandler) Zero(value reflect.Value) (*Todo, error) {
 	return popTodo.Clone(), nil
 }
 
-func (bigratHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (b bigratHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
+	return b._replace(value)
+}
+
+func (bigratPtrHandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(value.Type()))
+	return popTodo.Clone(), nil
+}
+
+func (bigratPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
 	if !isPositive {
 		return nil, ErrUnsupported
 	}
@@ -77,7 +122,16 @@ func (bigfloatHandler) Zero(value reflect.Value) (*Todo, error) {
 	return popTodo.Clone(), nil
 }
 
-func (bigfloatHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (b bigfloatHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
+	return b._replace(value)
+}
+
+func (bigfloatPtrHandler) Zero(value reflect.Value) (*Todo, error) {
+	value.Set(reflect.Zero(value.Type()))
+	return popTodo.Clone(), nil
+}
+
+func (bigfloatPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
 	if !isPositive {
 		return nil, ErrUnsupported
 	}

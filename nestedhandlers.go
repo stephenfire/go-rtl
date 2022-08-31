@@ -41,6 +41,9 @@ func newMapElement(val reflect.Value, size int) (*mapElement, error) {
 	if size%2 != 0 {
 		return nil, fmt.Errorf("length of the array must be even when decode to a map, but length=%d", size)
 	}
+	if val.IsNil() {
+		val.Set(reflect.MakeMapWithSize(typ, size/2))
+	}
 	ktyp := typ.Key()
 	vtyp := typ.Elem()
 	return &mapElement{
@@ -53,7 +56,7 @@ func newMapElement(val reflect.Value, size int) (*mapElement, error) {
 }
 
 func (m *mapElement) Element() (*Todo, error) {
-	if m.dataIdx > 0 && m.dataIdx%2 == 0 {
+	if m.dataIdx > 0 && m.dataIdx%2 == 1 {
 		// put value
 		if !m.kValue.IsValid() || !m.vValue.IsValid() {
 			return nil, fmt.Errorf("missing k-v values when %d/%d", m.dataIdx, m.dataSize)
@@ -269,7 +272,7 @@ func (s *structElement) Element() (*Todo, error) {
 		s.dataIdx++
 		if s.dataIdx < s.dataSize {
 			if s.dataIdx == fieldOrder {
-				fvalue := s.val.Field(s.fields[s.fieldIdx].index)
+				fvalue := s.val.Field(s.fields[nextField].index)
 				s.fieldIdx = nextField
 				return &Todo{
 					StackTodo: StackPush,

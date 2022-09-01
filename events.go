@@ -522,6 +522,14 @@ func (e *EventDecoder) Decode(r io.Reader, obj interface{}) error {
 	if rv.IsNil() {
 		return ErrDecodeIntoNil
 	}
+
+	// Check if obj is a Decoder, and if so, return directly. Because the pointer will be detached
+	// later, resulting in a change in the nature of its interface.
+	isDecoder, err := e.checkTypeOfDecoder(r, rv)
+	if isDecoder || err != nil {
+		return err
+	}
+
 	rev := rv.Elem()
 	if !rev.CanSet() {
 		return errors.New("obj cannot set")

@@ -341,7 +341,7 @@ var encTests = []param{
 }
 
 func TestEncode(t *testing.T) {
-	decoder := new(EventDecoder)
+	// decoder := new(EventDecoder)
 	for _, test := range encTests {
 		val := reflect.ValueOf(test.val)
 		bs, err := Marshal(test.val)
@@ -358,10 +358,10 @@ func TestEncode(t *testing.T) {
 		if err := Decode(buf, nv.Interface()); err != nil {
 			t.Error(err)
 		}
-		buf = bytes.NewBuffer(bs)
-		if err := decoder.Decode(buf, nv.Interface()); err != nil {
-			t.Fatal(err)
-		}
+		// buf = bytes.NewBuffer(bs)
+		// if err := decoder.Decode(buf, nv.Interface()); err != nil {
+		// 	t.Fatal(err)
+		// }
 
 		fmt.Printf("%v: %#v\n\t%X\n%v: %#v\n", typ, test.val, bs, nvv.Type(), nvv)
 		if reflect.DeepEqual(test.val, nvv.Interface()) {

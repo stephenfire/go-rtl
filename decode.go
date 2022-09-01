@@ -29,32 +29,33 @@ func Unmarshal(buf []byte, v interface{}) error {
 // Decode reads bytes from r unmarshal to v, if you want to use same Reader to Decode multi
 // values, you should use encoding.ValueReader as io.Reader.
 func Decode(r io.Reader, v interface{}) error {
-	if v == nil {
-		return ErrDecodeIntoNil
-	}
-
-	rv := reflect.ValueOf(v)
-	if rv.Kind() != reflect.Ptr {
-		return ErrDecodeNoPtr
-	}
-	if rv.IsNil() {
-		return ErrDecodeIntoNil
-	}
-
+	return new(EventDecoder).Decode(r, v)
+	// if v == nil {
+	// 	return ErrDecodeIntoNil
+	// }
+	//
+	// rv := reflect.ValueOf(v)
+	// if rv.Kind() != reflect.Ptr {
+	// 	return ErrDecodeNoPtr
+	// }
+	// if rv.IsNil() {
+	// 	return ErrDecodeIntoNil
+	// }
+	//
 	// isDecoder, err := checkTypeOfDecoder(r, rv)
 	// if isDecoder || err != nil {
 	// 	return err
 	// }
-
-	rev := rv.Elem()
-	vr, ok := r.(ValueReader)
-	if !ok {
-		vr = NewValueReader(r)
-	}
-	if err := valueReader(vr, rev); err != nil {
-		return err
-	}
-	return nil
+	//
+	// rev := rv.Elem()
+	// vr, ok := r.(ValueReader)
+	// if !ok {
+	// 	vr = NewValueReader(r)
+	// }
+	// if err := valueReader(vr, rev); err != nil {
+	// 	return err
+	// }
+	// return nil
 }
 
 func checkTypeOfDecoder(r io.Reader, value reflect.Value) (isDecoder bool, err error) {

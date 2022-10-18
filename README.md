@@ -19,7 +19,7 @@
 1. go.mod
 
    ```
-   require github.com/stephenfire/go-rtl v1.0.1
+   require github.com/stephenfire/go-rtl v1.0.4
    ```
 
 2. 引入包

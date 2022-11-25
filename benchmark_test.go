@@ -185,7 +185,7 @@ func BenchmarkDecodeV2(b *testing.B) {
 		buf := bytes.NewBuffer(_steams[j])
 		err := DecodeV2(buf, obj)
 		if err != nil {
-			b.Fatalf("decode v1 failed: %v", err)
+			b.Fatalf("decode v1 failed: %v, index: %d, obj: %v, stream: %x", err, i, _objects[j], _steams[j])
 		}
 		objs[j] = obj
 	}

@@ -73,12 +73,12 @@ func init() {
 
 func (intHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	value.SetInt(int64(input))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (intHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.SetInt(0)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (intHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -87,17 +87,17 @@ func (intHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*
 	}
 	i := Numeric.BytesToInt64(inputs, !isPositive)
 	value.SetInt(i)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (uintHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	value.SetUint(uint64(input))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (uintHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.SetUint(0)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (uintHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -109,17 +109,17 @@ func (uintHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (
 	}
 	i := Numeric.BytesToUint64(inputs)
 	value.SetUint(i)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (floatHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	value.SetFloat(Numeric.ByteToFloat64(input, false))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (floatHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.SetFloat(0)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (floatHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -133,43 +133,43 @@ func (floatHandler) Number(value reflect.Value, isPositive bool, inputs []byte) 
 		f = Numeric.BytesToFloat64(inputs, !isPositive)
 	}
 	value.SetFloat(f)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (boolHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.SetBool(false)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (boolHandler) True(value reflect.Value) (*Todo, error) {
 	value.SetBool(true)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (stringHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	value.SetString(string([]byte{input}))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (stringHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (stringHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
 	value.SetString(string(inputs))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (mapHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (mapHandler) Empty(value reflect.Value) (*Todo, error) {
 	nmap := reflect.MakeMapWithSize(value.Type(), 0)
 	value.Set(nmap)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (mapHandler) Array(value reflect.Value, length int) (*Todo, error) {
@@ -177,15 +177,16 @@ func (mapHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new map nested handler failed: %v", err)
 	}
-	return &Todo{
-		StackTodo: StackNested,
-		Nested:    nested,
-	}, nil
+	return _newTodo().SetNested(nested), nil
+	// return &Todo{
+	// 	StackTodo: StackNested,
+	// 	Nested:    nested,
+	// }, nil
 }
 
 func (structHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (structHandler) Array(value reflect.Value, length int) (*Todo, error) {
@@ -193,26 +194,28 @@ func (structHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new struct nested handler failed: %v", err)
 	}
-	return &Todo{
-		StackTodo: StackNested,
-		Nested:    nested,
-	}, nil
+	return _newTodo().SetNested(nested), nil
+	// return &Todo{
+	// 	StackTodo: StackNested,
+	// 	Nested:    nested,
+	// }, nil
 }
 
 func (a arrayHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
 		reflect.Copy(value, reflect.ValueOf(inputs))
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	} else {
 		nested, err := newString2ArraySlice(value, inputs)
 		if err != nil {
 			return nil, fmt.Errorf("new string 2 array nested handler failed: %v", err)
 		}
-		return &Todo{
-			StackTodo: StackNested,
-			Nested:    nested,
-		}, nil
+		return _newTodo().SetNested(nested), nil
+		// return &Todo{
+		// 	StackTodo: StackNested,
+		// 	Nested:    nested,
+		// }, nil
 	}
 }
 
@@ -222,7 +225,7 @@ func (a arrayHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 
 func (a arrayHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (a arrayHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
@@ -234,10 +237,11 @@ func (a arrayHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new array nested handler failed: %v", err)
 	}
-	return &Todo{
-		StackTodo: StackNested,
-		Nested:    nested,
-	}, nil
+	return _newTodo().SetNested(nested), nil
+	// return &Todo{
+	// 	StackTodo: StackNested,
+	// 	Nested:    nested,
+	// }, nil
 }
 
 func (s sliceHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
@@ -245,16 +249,17 @@ func (s sliceHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error)
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
 		reflect.Copy(value, reflect.ValueOf(inputs))
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	} else {
 		nested, err := newString2ArraySlice(value, inputs)
 		if err != nil {
 			return nil, fmt.Errorf("new string 2 slice nested handler failed: %v", err)
 		}
-		return &Todo{
-			StackTodo: StackNested,
-			Nested:    nested,
-		}, nil
+		return _newTodo().SetNested(nested), nil
+		// return &Todo{
+		// 	StackTodo: StackNested,
+		// 	Nested:    nested,
+		// }, nil
 	}
 }
 
@@ -264,7 +269,7 @@ func (s sliceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 
 func (s sliceHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (s sliceHandler) Empty(value reflect.Value) (*Todo, error) {
@@ -272,7 +277,7 @@ func (s sliceHandler) Empty(value reflect.Value) (*Todo, error) {
 		nslice := reflect.MakeSlice(value.Type(), 0, 0)
 		value.Set(nslice)
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (s sliceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
@@ -284,10 +289,11 @@ func (s sliceHandler) Array(value reflect.Value, length int) (*Todo, error) {
 	if err != nil {
 		return nil, fmt.Errorf("new slice nested handler failed: %v", err)
 	}
-	return &Todo{
-		StackTodo: StackNested,
-		Nested:    nested,
-	}, nil
+	return _newTodo().SetNested(nested), nil
+	// return &Todo{
+	// 	StackTodo: StackNested,
+	// 	Nested:    nested,
+	// }, nil
 }
 
 func (p pointerHandler) _element(value reflect.Value) (reflect.Value, error) {
@@ -313,10 +319,11 @@ func (p pointerHandler) _handle(value reflect.Value) (*Todo, error) {
 	if evalue, err := p._element(value); err != nil {
 		return nil, err
 	} else {
-		return &Todo{
-			StackTodo: StackReplaceTop,
-			Val:       evalue,
-		}, nil
+		return _newTodo().SetReplace(evalue), nil
+		// return &Todo{
+		// 	StackTodo: StackReplaceTop,
+		// 	Val:       evalue,
+		// }, nil
 	}
 }
 
@@ -329,7 +336,7 @@ func (p pointerHandler) Zero(value reflect.Value) (*Todo, error) {
 	if !value.IsNil() {
 		value.Set(reflect.Zero(value.Type()))
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (p pointerHandler) True(value reflect.Value) (*Todo, error) {
@@ -360,17 +367,17 @@ func (interfaceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	nv := reflect.New(typeOfUint64).Elem()
 	nv.SetUint(uint64(input))
 	value.Set(nv)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (interfaceHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(typeOfInterface))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (interfaceHandler) Empty(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.MakeSlice(typeOfInterfaceSlice, 0, 0))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (interfaceHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -394,21 +401,22 @@ func (interfaceHandler) Number(value reflect.Value, isPositive bool, inputs []by
 		}
 		value.Set(reflect.ValueOf(i))
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (interfaceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
 	nv := reflect.New(typeOfString).Elem()
 	nv.SetString(string(inputs))
 	value.Set(nv)
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (interfaceHandler) Array(value reflect.Value, size int) (*Todo, error) {
 	slice := reflect.MakeSlice(typeOfInterfaceSlice, size, size)
 	value.Set(slice)
-	return &Todo{
-		StackTodo: StackReplaceTop,
-		Val:       slice,
-	}, nil
+	return _newTodo().SetReplace(slice), nil
+	// return &Todo{
+	// 	StackTodo: StackReplaceTop,
+	// 	Val:       slice,
+	// }, nil
 }

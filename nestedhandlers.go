@@ -55,6 +55,13 @@ func newMapElement(val reflect.Value, size int) (*mapElement, error) {
 	}, nil
 }
 
+func (m *mapElement) String() string {
+	if m == nil {
+		return "mapElem<nil>"
+	}
+	return fmt.Sprintf("mapElem[%d/%d]", m.dataIdx, m.dataSize)
+}
+
 func (m *mapElement) Element() (*Todo, error) {
 	if m.dataIdx > 0 && m.dataIdx%2 == 1 {
 		// put value
@@ -68,18 +75,19 @@ func (m *mapElement) Element() (*Todo, error) {
 	m.dataIdx++
 	if m.dataIdx >= m.dataSize {
 		// map finished
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	}
 	if m.dataIdx%2 == 0 {
 		if m.kValue.IsValid() {
 			return nil, fmt.Errorf("a valid key value already in cache when %d/%d", m.dataIdx, m.dataSize)
 		}
 		m.kValue = reflect.New(m.kType).Elem()
-		return &Todo{
-			StackTodo: StackPush,
-			Val:       m.kValue,
-			Th:        THInvalid,
-		}, nil
+		return _newTodo().SetPush(m.kValue, THInvalid), nil
+		// return &Todo{
+		// 	StackTodo: StackPush,
+		// 	Val:       m.kValue,
+		// 	Th:        THInvalid,
+		// }, nil
 	} else {
 		if m.vValue.IsValid() {
 			return nil, fmt.Errorf("a valid v value already in cache when %d/%d", m.dataIdx, m.dataSize)
@@ -88,11 +96,12 @@ func (m *mapElement) Element() (*Todo, error) {
 			return nil, fmt.Errorf("missing key value when %d/%d", m.dataIdx, m.dataSize)
 		}
 		m.vValue = reflect.New(m.vType).Elem()
-		return &Todo{
-			StackTodo: StackPush,
-			Val:       m.vValue,
-			Th:        THInvalid,
-		}, nil
+		return _newTodo().SetPush(m.vValue, THInvalid), nil
+		// return &Todo{
+		// 	StackTodo: StackPush,
+		// 	Val:       m.vValue,
+		// 	Th:        THInvalid,
+		// }, nil
 	}
 }
 
@@ -129,17 +138,25 @@ func newSliceElement(val reflect.Value, size int) (*sliceElement, error) {
 	}, nil
 }
 
+func (s *sliceElement) String() string {
+	if s == nil {
+		return "sliceElem<nil>"
+	}
+	return fmt.Sprintf("sliceElem[%d/%d]", s.dataIdx, s.dataSize)
+}
+
 func (s *sliceElement) Element() (*Todo, error) {
 	s.dataIdx++
 	if s.dataIdx >= s.dataSize {
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	}
 	evalue := s.val.Index(s.dataIdx)
-	return &Todo{
-		StackTodo: StackPush,
-		Val:       evalue,
-		Th:        THInvalid,
-	}, nil
+	return _newTodo().SetPush(evalue, THInvalid), nil
+	// return &Todo{
+	// 	StackTodo: StackPush,
+	// 	Val:       evalue,
+	// 	Th:        THInvalid,
+	// }, nil
 }
 
 func (s *sliceElement) Index() int {
@@ -169,10 +186,17 @@ func newArrayElement(val reflect.Value, size int) (*arrayElement, error) {
 	}, nil
 }
 
+func (s *arrayElement) String() string {
+	if s == nil {
+		return "arrayElem<nil>"
+	}
+	return fmt.Sprintf("arrayElem[%d/%d->%d]", s.dataIdx, s.dataSize, s.valueSize)
+}
+
 func (s *arrayElement) Element() (*Todo, error) {
 	s.dataIdx++
 	if s.dataIdx >= s.dataSize || s.dataIdx >= s.valueSize {
-		todo := popTodo.Clone()
+		todo := _popTodo()
 		if s.dataSize > s.valueSize {
 			todo.DataTodo = DataSkip
 			todo.Length = s.dataSize - s.valueSize
@@ -180,11 +204,12 @@ func (s *arrayElement) Element() (*Todo, error) {
 		return todo, nil
 	}
 	evalue := s.val.Index(s.dataIdx)
-	return &Todo{
-		StackTodo: StackPush,
-		Val:       evalue,
-		Th:        THInvalid,
-	}, nil
+	return _newTodo().SetPush(evalue, THInvalid), nil
+	// return &Todo{
+	// 	StackTodo: StackPush,
+	// 	Val:       evalue,
+	// 	Th:        THInvalid,
+	// }, nil
 }
 
 func (s *arrayElement) Index() int {
@@ -221,18 +246,28 @@ func newString2ArraySlice(val reflect.Value, buf []byte) (*string2ArraySlice, er
 	}, nil
 }
 
+func (s *string2ArraySlice) String() string {
+	if s == nil {
+		return "string2Array<nil>"
+	}
+	return fmt.Sprintf("string2Array[%d/%d->%d]", s.idx, len(s.buf), s.valueSize)
+}
+
 func (s *string2ArraySlice) Element() (*Todo, error) {
 	s.idx++
 	if s.idx >= s.valueSize || s.idx >= len(s.buf) {
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	}
 	evalue := s.val.Index(s.idx)
-	return &Todo{
-		StackTodo: StackPush,
-		Val:       evalue,
-		Th:        THSingleByte,
-		Length:    int(s.buf[s.idx]),
-	}, nil
+	todo := _newTodo().SetPush(evalue, THSingleByte)
+	todo.Length = int(s.buf[s.idx])
+	return todo, nil
+	// return &Todo{
+	// 	StackTodo: StackPush,
+	// 	Val:       evalue,
+	// 	Th:        THSingleByte,
+	// 	Length:    int(s.buf[s.idx]),
+	// }, nil
 }
 
 func (s *string2ArraySlice) Index() int {
@@ -265,6 +300,13 @@ func newStructElement(val reflect.Value, size int) (*structElement, error) {
 	}, nil
 }
 
+func (s *structElement) String() string {
+	if s == nil {
+		return "structElem<nil>"
+	}
+	return fmt.Sprintf("structElem[%d/%d->%d/%d]", s.dataIdx, s.dataSize, s.fieldIdx, len(s.fields))
+}
+
 func (s *structElement) Element() (*Todo, error) {
 	nextField := s.fieldIdx + 1
 	if nextField < len(s.fields) {
@@ -274,13 +316,15 @@ func (s *structElement) Element() (*Todo, error) {
 			if s.dataIdx == fieldOrder {
 				fvalue := s.val.Field(s.fields[nextField].index)
 				s.fieldIdx = nextField
-				return &Todo{
-					StackTodo: StackPush,
-					Val:       fvalue,
-					Th:        THInvalid,
-				}, nil
+				return _newTodo().SetPush(fvalue, THInvalid), nil
+				// return &Todo{
+				// 	StackTodo: StackPush,
+				// 	Val:       fvalue,
+				// 	Th:        THInvalid,
+				// }, nil
 			} else if s.dataIdx < fieldOrder {
-				return &Todo{DataTodo: DataSkip, Length: 1}, nil
+				return _emptyTodo().SetSkip(1), nil
+				// return &Todo{DataTodo: DataSkip, Length: 1}, nil
 			} else {
 				return nil, fmt.Errorf("illegal status found: dataIdx:%d fieldIdx:%d %s",
 					s.dataIdx, nextField, s.fields[nextField])
@@ -297,13 +341,14 @@ func (s *structElement) Element() (*Todo, error) {
 
 	if s.dataIdx < s.dataSize-1 {
 		// skip datas and pop stack
-		return &Todo{
-			StackTodo: StackPop,
-			DataTodo:  DataSkip,
-			Length:    s.dataSize - 1 - s.dataIdx,
-		}, nil
+		return _popTodo().SetSkip(s.dataSize - 1 - s.dataIdx), nil
+		// return &Todo{
+		// 	StackTodo: StackPop,
+		// 	DataTodo:  DataSkip,
+		// 	Length:    s.dataSize - 1 - s.dataIdx,
+		// }, nil
 	} else {
-		return popTodo.Clone(), nil
+		return _popTodo(), nil
 	}
 }
 

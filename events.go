@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"reflect"
+	"sync"
 )
 
 type handleState struct {
@@ -66,7 +67,11 @@ func (s *handleState) info() string {
 	if !s.val.IsValid() {
 		return "<NA>"
 	}
-	return fmt.Sprintf("{%s(%s)-%s}", s.typ.Name(), s.typ.Kind(), s.th)
+	hstr := ""
+	if s.handler != nil {
+		hstr = fmt.Sprintf(", %s", s.handler.String())
+	}
+	return fmt.Sprintf("{%s(%s)-%s%s}", s.typ.Name(), s.typ.Kind(), s.th, hstr)
 }
 
 func (s *handleState) isValid() bool {
@@ -202,11 +207,11 @@ type (
 	Todo struct {
 		StackTodo StackOp
 		DataTodo  DataOp
-		Val       reflect.Value
-		Th        TypeHeader // used for
-		Length    int
-		Inputs    []byte
-		Nested    NestedHandler
+		Val       reflect.Value // used if StackTodo==StackReplaceTo||StackPush
+		Th        TypeHeader    // used if StackTodo==StackPush
+		Length    int           // used if StackTodo==StackPush || DataTodo==DataSkip
+		Inputs    []byte        // used if StackTodo==StackPush
+		Nested    NestedHandler // used if StackTodo==StackPush||StackNested
 	}
 
 	// the lowest level event handler which process top of the stack
@@ -222,6 +227,7 @@ type (
 	}
 
 	NestedHandler interface {
+		String() string
 		Element() (*Todo, error)
 		Index() int
 	}
@@ -233,11 +239,35 @@ var (
 	_systemKindHandlers = make(map[reflect.Kind]HeaderHandler)
 	_systemTypeHandlers = make(map[reflect.Type]HeaderHandler)
 
-	popTodo = Todo{
-		StackTodo: StackPop,
-		Val:       reflect.Value{},
+	// popTodo = Todo{
+	// 	StackTodo: StackPop,
+	// 	Val:       reflect.Value{},
+	// }
+
+	_todoObjPool = sync.Pool{
+		New: func() interface{} {
+			return &Todo{}
+		},
 	}
 )
+
+func _popTodo() *Todo {
+	todo := _todoObjPool.Get().(*Todo)
+	todo.StackTodo = StackPop
+	todo.DataTodo = DataNone
+	return todo
+}
+
+func _newTodo() *Todo {
+	return _todoObjPool.Get().(*Todo)
+}
+
+func _emptyTodo() *Todo {
+	todo := _newTodo()
+	todo.StackTodo = StackNone
+	todo.DataTodo = DataNone
+	return todo
+}
 
 func _systemKindHandler(handler HeaderHandler, kinds ...reflect.Kind) {
 	for _, k := range kinds {
@@ -301,6 +331,35 @@ func (f *Todo) String() string {
 	}
 }
 
+func (f *Todo) SetNested(nested NestedHandler) *Todo {
+	f.StackTodo = StackNested
+	f.DataTodo = DataNone
+	f.Nested = nested
+	return f
+}
+
+func (f *Todo) SetReplace(val reflect.Value) *Todo {
+	f.StackTodo = StackReplaceTop
+	f.DataTodo = DataNone
+	f.Val = val
+	return f
+}
+
+func (f *Todo) SetPush(val reflect.Value, th TypeHeader) *Todo {
+	f.StackTodo = StackPush
+	f.DataTodo = DataNone
+	f.Val = val
+	f.Th = th
+	f.Nested = nil
+	return f
+}
+
+func (f *Todo) SetSkip(length int) *Todo {
+	f.DataTodo = DataSkip
+	f.Length = length
+	return f
+}
+
 func (f *Todo) Validate() error {
 	if f == nil {
 		return errors.New("nil todo")
@@ -319,17 +378,6 @@ func (f *Todo) Validate() error {
 		return fmt.Errorf("invalid length of DataOp:%s", f.DataTodo)
 	}
 	return nil
-}
-
-func (f *Todo) Clone() *Todo {
-	if f == nil {
-		return nil
-	}
-	return &Todo{
-		StackTodo: f.StackTodo,
-		Val:       f.Val,
-		Nested:    f.Nested,
-	}
 }
 
 func (h DefaultHeaderHandler) Byte(_ reflect.Value, _ byte) (*Todo, error) {
@@ -507,6 +555,8 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 		if err = ctx.apply(todo); err != nil {
 			return fmt.Errorf("rtl: apply %s failed: %v", todo, err)
 		}
+
+		_todoObjPool.Put(todo)
 	}
 }
 

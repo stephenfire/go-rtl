@@ -53,10 +53,11 @@ func init() {
 }
 
 func (addressHandler) _replace(value reflect.Value) (*Todo, error) {
-	return &Todo{
-		StackTodo: StackReplaceTop,
-		Val:       value.Addr(),
-	}, nil
+	return _newTodo().SetReplace(value.Addr()), nil
+	// return &Todo{
+	// 	StackTodo: StackReplaceTop,
+	// 	Val:       value.Addr(),
+	// }, nil
 }
 
 func (b bigintHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
@@ -65,7 +66,7 @@ func (b bigintHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
 
 func (bigintHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (b bigintHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
@@ -75,12 +76,12 @@ func (b bigintHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, err
 func (bigintPtrhandler) Byte(value reflect.Value, input byte) (*Todo, error) {
 	i := getOrNewBigInt(value)
 	i.SetInt64(int64(input))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigintPtrhandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigintPtrhandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -89,12 +90,12 @@ func (bigintPtrhandler) Number(value reflect.Value, isPositive bool, inputs []by
 	if !isPositive {
 		i.Neg(i)
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigratHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (b bigratHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
@@ -103,7 +104,7 @@ func (b bigratHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, err
 
 func (bigratPtrHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigratPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -114,12 +115,12 @@ func (bigratPtrHandler) Number(value reflect.Value, isPositive bool, inputs []by
 	if err := r.GobDecode(inputs); err != nil {
 		return nil, err
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigfloatHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (b bigfloatHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
@@ -128,7 +129,7 @@ func (b bigfloatHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, e
 
 func (bigfloatPtrHandler) Zero(value reflect.Value) (*Todo, error) {
 	value.Set(reflect.Zero(value.Type()))
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }
 
 func (bigfloatPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
@@ -139,5 +140,5 @@ func (bigfloatPtrHandler) Number(value reflect.Value, isPositive bool, inputs []
 	if err := f.GobDecode(inputs); err != nil {
 		return nil, err
 	}
-	return popTodo.Clone(), nil
+	return _popTodo(), nil
 }

@@ -22,24 +22,24 @@ type (
 	addressHandler struct{}
 	bigintHandler  struct {
 		addressHandler
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	bigintPtrhandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	bigratHandler struct {
 		addressHandler
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	bigratPtrHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	bigfloatHandler struct {
 		addressHandler
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	bigfloatPtrHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 )
 
@@ -52,93 +52,89 @@ func init() {
 	_systemTypeHandler(bigfloatPtrHandler{}, reflect.PtrTo(typeOfBigFloat))
 }
 
-func (addressHandler) _replace(value reflect.Value) (*Todo, error) {
-	return _newTodo().SetReplace(value.Addr()), nil
-	// return &Todo{
-	// 	StackTodo: StackReplaceTop,
-	// 	Val:       value.Addr(),
-	// }, nil
+func (addressHandler) _replace(ctx *HandleContext, value reflect.Value) error {
+	return ctx.ReplaceStack(value.Addr())
 }
 
-func (b bigintHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
-	return b._replace(value)
+func (b bigintHandler) Byte(ctx *HandleContext, value reflect.Value, _ byte) error {
+	return b._replace(ctx, value)
 }
 
-func (bigintHandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigintHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (b bigintHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
-	return b._replace(value)
+func (b bigintHandler) Number(ctx *HandleContext, value reflect.Value, _ bool, _ []byte) error {
+	return b._replace(ctx, value)
 }
 
-func (bigintPtrhandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (bigintPtrhandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	i := getOrNewBigInt(value)
 	i.SetInt64(int64(input))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigintPtrhandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigintPtrhandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigintPtrhandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (bigintPtrhandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	i := getOrNewBigInt(value)
 	i.SetBytes(inputs)
 	if !isPositive {
 		i.Neg(i)
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigratHandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigratHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (b bigratHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
-	return b._replace(value)
+func (b bigratHandler) Number(ctx *HandleContext, value reflect.Value, _ bool, _ []byte) error {
+	return b._replace(ctx, value)
 }
 
-func (bigratPtrHandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigratPtrHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigratPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (bigratPtrHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	if !isPositive {
-		return nil, ErrUnsupported
+		return ErrUnsupported
 	}
 	r := getOrNewBigRat(value)
 	if err := r.GobDecode(inputs); err != nil {
-		return nil, err
+		return err
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigfloatHandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigfloatHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (b bigfloatHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
-	return b._replace(value)
+func (b bigfloatHandler) Number(ctx *HandleContext, value reflect.Value, _ bool, _ []byte) error {
+	return b._replace(ctx, value)
 }
 
-func (bigfloatPtrHandler) Zero(value reflect.Value) (*Todo, error) {
+func (bigfloatPtrHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (bigfloatPtrHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (bigfloatPtrHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	if !isPositive {
-		return nil, ErrUnsupported
+		return ErrUnsupported
 	}
 	f := getOrNewBigFloat(value)
 	if err := f.GobDecode(inputs); err != nil {
-		return nil, err
+		return err
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }

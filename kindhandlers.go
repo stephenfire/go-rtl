@@ -25,35 +25,35 @@ import (
 
 type (
 	intHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	uintHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	floatHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	boolHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	stringHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	mapHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	structHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	arrayHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	sliceHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 	pointerHandler   struct{}
 	interfaceHandler struct {
-		DefaultHeaderHandler
+		DefaultEventHandler
 	}
 )
 
@@ -71,60 +71,60 @@ func init() {
 	_systemKindHandler(interfaceHandler{}, reflect.Interface)
 }
 
-func (intHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (intHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	value.SetInt(int64(input))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (intHandler) Zero(value reflect.Value) (*Todo, error) {
+func (intHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.SetInt(0)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (intHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (intHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	if len(inputs) > 8 {
-		return nil, errors.New("too many bytes for int64")
+		return errors.New("too many bytes for int64")
 	}
 	i := Numeric.BytesToInt64(inputs, !isPositive)
 	value.SetInt(i)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (uintHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (uintHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	value.SetUint(uint64(input))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (uintHandler) Zero(value reflect.Value) (*Todo, error) {
+func (uintHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.SetUint(0)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (uintHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (uintHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	if !isPositive {
-		return nil, errors.New("negative not supported for uint64")
+		return errors.New("negative not supported for uint64")
 	}
 	if len(inputs) > 8 {
-		return nil, errors.New("too many bytes for uint64")
+		return errors.New("too many bytes for uint64")
 	}
 	i := Numeric.BytesToUint64(inputs)
 	value.SetUint(i)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (floatHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (floatHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	value.SetFloat(Numeric.ByteToFloat64(input, false))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (floatHandler) Zero(value reflect.Value) (*Todo, error) {
+func (floatHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.SetFloat(0)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (floatHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (floatHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	if len(inputs) > 8 {
-		return nil, errors.New("too many bytes for float")
+		return errors.New("too many bytes for float")
 	}
 	var f float64
 	if len(inputs) == 4 {
@@ -133,167 +133,143 @@ func (floatHandler) Number(value reflect.Value, isPositive bool, inputs []byte) 
 		f = Numeric.BytesToFloat64(inputs, !isPositive)
 	}
 	value.SetFloat(f)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (boolHandler) Zero(value reflect.Value) (*Todo, error) {
+func (boolHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.SetBool(false)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (boolHandler) True(value reflect.Value) (*Todo, error) {
+func (boolHandler) True(ctx *HandleContext, value reflect.Value) error {
 	value.SetBool(true)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (stringHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (stringHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	value.SetString(string([]byte{input}))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (stringHandler) Zero(value reflect.Value) (*Todo, error) {
+func (stringHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (stringHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+func (stringHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []byte) error {
 	value.SetString(string(inputs))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (mapHandler) Zero(value reflect.Value) (*Todo, error) {
+func (mapHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (mapHandler) Empty(value reflect.Value) (*Todo, error) {
+func (mapHandler) Empty(ctx *HandleContext, value reflect.Value) error {
 	nmap := reflect.MakeMapWithSize(value.Type(), 0)
 	value.Set(nmap)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (mapHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (mapHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
 	nested, err := newMapElement(value, length)
 	if err != nil {
-		return nil, fmt.Errorf("new map nested handler failed: %v", err)
+		return fmt.Errorf("new map nested handler failed: %v", err)
 	}
-	return _newTodo().SetNested(nested), nil
-	// return &Todo{
-	// 	StackTodo: StackNested,
-	// 	Nested:    nested,
-	// }, nil
+	return ctx.NestedStack(nested)
 }
 
-func (structHandler) Zero(value reflect.Value) (*Todo, error) {
+func (structHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (structHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (structHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
 	nested, err := newStructElement(value, length)
 	if err != nil {
-		return nil, fmt.Errorf("new struct nested handler failed: %v", err)
+		return fmt.Errorf("new struct nested handler failed: %v", err)
 	}
-	return _newTodo().SetNested(nested), nil
-	// return &Todo{
-	// 	StackTodo: StackNested,
-	// 	Nested:    nested,
-	// }, nil
+	return ctx.NestedStack(nested)
 }
 
-func (a arrayHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
+func (a arrayHandler) _bytes(ctx *HandleContext, value reflect.Value, inputs ...byte) error {
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
 		reflect.Copy(value, reflect.ValueOf(inputs))
-		return _popTodo(), nil
+		return ctx.PopState()
 	} else {
 		nested, err := newString2ArraySlice(value, inputs)
 		if err != nil {
-			return nil, fmt.Errorf("new string 2 array nested handler failed: %v", err)
+			return fmt.Errorf("new string 2 array nested handler failed: %v", err)
 		}
-		return _newTodo().SetNested(nested), nil
-		// return &Todo{
-		// 	StackTodo: StackNested,
-		// 	Nested:    nested,
-		// }, nil
+		return ctx.NestedStack(nested)
 	}
 }
 
-func (a arrayHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
-	return a._bytes(value, input)
+func (a arrayHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
+	return a._bytes(ctx, value, input)
 }
 
-func (a arrayHandler) Zero(value reflect.Value) (*Todo, error) {
+func (a arrayHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (a arrayHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
-	return a._bytes(value, inputs...)
+func (a arrayHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []byte) error {
+	return a._bytes(ctx, value, inputs...)
 }
 
-func (a arrayHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (a arrayHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
 	nested, err := newArrayElement(value, length)
 	if err != nil {
-		return nil, fmt.Errorf("new array nested handler failed: %v", err)
+		return fmt.Errorf("new array nested handler failed: %v", err)
 	}
-	return _newTodo().SetNested(nested), nil
-	// return &Todo{
-	// 	StackTodo: StackNested,
-	// 	Nested:    nested,
-	// }, nil
+	return ctx.NestedStack(nested)
 }
 
-func (s sliceHandler) _bytes(value reflect.Value, inputs ...byte) (*Todo, error) {
+func (s sliceHandler) _bytes(ctx *HandleContext, value reflect.Value, inputs ...byte) error {
 	checkSlice0(len(inputs), value)
 	etyp := value.Type().Elem()
 	if etyp == typeOfByte {
 		reflect.Copy(value, reflect.ValueOf(inputs))
-		return _popTodo(), nil
+		return ctx.PopState()
 	} else {
 		nested, err := newString2ArraySlice(value, inputs)
 		if err != nil {
-			return nil, fmt.Errorf("new string 2 slice nested handler failed: %v", err)
+			return fmt.Errorf("new string 2 slice nested handler failed: %v", err)
 		}
-		return _newTodo().SetNested(nested), nil
-		// return &Todo{
-		// 	StackTodo: StackNested,
-		// 	Nested:    nested,
-		// }, nil
+		return ctx.NestedStack(nested)
 	}
 }
 
-func (s sliceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
-	return s._bytes(value, input)
+func (s sliceHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
+	return s._bytes(ctx, value, input)
 }
 
-func (s sliceHandler) Zero(value reflect.Value) (*Todo, error) {
+func (s sliceHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(value.Type()))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (s sliceHandler) Empty(value reflect.Value) (*Todo, error) {
+func (s sliceHandler) Empty(ctx *HandleContext, value reflect.Value) error {
 	if value.CanSet() {
 		nslice := reflect.MakeSlice(value.Type(), 0, 0)
 		value.Set(nslice)
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (s sliceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
-	return s._bytes(value, inputs...)
+func (s sliceHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []byte) error {
+	return s._bytes(ctx, value, inputs...)
 }
 
-func (s sliceHandler) Array(value reflect.Value, length int) (*Todo, error) {
+func (s sliceHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
 	nested, err := newSliceElement(value, length)
 	if err != nil {
-		return nil, fmt.Errorf("new slice nested handler failed: %v", err)
+		return fmt.Errorf("new slice nested handler failed: %v", err)
 	}
-	return _newTodo().SetNested(nested), nil
-	// return &Todo{
-	// 	StackTodo: StackNested,
-	// 	Nested:    nested,
-	// }, nil
+	return ctx.NestedStack(nested)
 }
 
 func (p pointerHandler) _element(value reflect.Value) (reflect.Value, error) {
@@ -315,72 +291,68 @@ func (p pointerHandler) _element(value reflect.Value) (reflect.Value, error) {
 	return evalue.Elem(), nil
 }
 
-func (p pointerHandler) _handle(value reflect.Value) (*Todo, error) {
+func (p pointerHandler) _handle(ctx *HandleContext, value reflect.Value) error {
 	if evalue, err := p._element(value); err != nil {
-		return nil, err
+		return err
 	} else {
-		return _newTodo().SetReplace(evalue), nil
-		// return &Todo{
-		// 	StackTodo: StackReplaceTop,
-		// 	Val:       evalue,
-		// }, nil
+		return ctx.ReplaceStack(evalue)
 	}
 }
 
-func (p pointerHandler) Byte(value reflect.Value, _ byte) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Byte(ctx *HandleContext, value reflect.Value, _ byte) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Zero(value reflect.Value) (*Todo, error) {
+func (p pointerHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	// return p._handle(value)
 	if !value.IsNil() {
 		value.Set(reflect.Zero(value.Type()))
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (p pointerHandler) True(value reflect.Value) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) True(ctx *HandleContext, value reflect.Value) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Empty(value reflect.Value) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Empty(ctx *HandleContext, value reflect.Value) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Array(value reflect.Value, _ int) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Array(ctx *HandleContext, value reflect.Value, _ int) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Number(value reflect.Value, _ bool, _ []byte) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Number(ctx *HandleContext, value reflect.Value, _ bool, _ []byte) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Bytes(value reflect.Value, _ []byte) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Bytes(ctx *HandleContext, value reflect.Value, _ []byte) error {
+	return p._handle(ctx, value)
 }
 
-func (p pointerHandler) Version(value reflect.Value, _ ...byte) (*Todo, error) {
-	return p._handle(value)
+func (p pointerHandler) Version(ctx *HandleContext, value reflect.Value, _ ...byte) error {
+	return p._handle(ctx, value)
 }
 
-func (interfaceHandler) Byte(value reflect.Value, input byte) (*Todo, error) {
+func (interfaceHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
 	nv := reflect.New(typeOfUint64).Elem()
 	nv.SetUint(uint64(input))
 	value.Set(nv)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (interfaceHandler) Zero(value reflect.Value) (*Todo, error) {
+func (interfaceHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.Zero(typeOfInterface))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (interfaceHandler) Empty(value reflect.Value) (*Todo, error) {
+func (interfaceHandler) Empty(ctx *HandleContext, value reflect.Value) error {
 	value.Set(reflect.MakeSlice(typeOfInterfaceSlice, 0, 0))
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (interfaceHandler) Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error) {
+func (interfaceHandler) Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error {
 	l := len(inputs)
 	if l <= 8 {
 		if !isPositive {
@@ -401,22 +373,18 @@ func (interfaceHandler) Number(value reflect.Value, isPositive bool, inputs []by
 		}
 		value.Set(reflect.ValueOf(i))
 	}
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (interfaceHandler) Bytes(value reflect.Value, inputs []byte) (*Todo, error) {
+func (interfaceHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []byte) error {
 	nv := reflect.New(typeOfString).Elem()
 	nv.SetString(string(inputs))
 	value.Set(nv)
-	return _popTodo(), nil
+	return ctx.PopState()
 }
 
-func (interfaceHandler) Array(value reflect.Value, size int) (*Todo, error) {
+func (interfaceHandler) Array(ctx *HandleContext, value reflect.Value, size int) error {
 	slice := reflect.MakeSlice(typeOfInterfaceSlice, size, size)
 	value.Set(slice)
-	return _newTodo().SetReplace(slice), nil
-	// return &Todo{
-	// 	StackTodo: StackReplaceTop,
-	// 	Val:       slice,
-	// }, nil
+	return ctx.ReplaceStack(slice)
 }

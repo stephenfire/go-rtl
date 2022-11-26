@@ -37,13 +37,6 @@ type handleState struct {
 	handler NestedHandler
 }
 
-func newState(val reflect.Value) (*handleState, error) {
-	if !val.IsValid() {
-		return nil, ErrInvalidValue
-	}
-	return &handleState{val: val, typ: val.Type(), th: THInvalid}, nil
-}
-
 func (s *handleState) String() string {
 	if s == nil {
 		return "<nil>"
@@ -54,7 +47,7 @@ func (s *handleState) String() string {
 	typ := s.val.Type()
 	kind := typ.Kind()
 	if s.handler != nil {
-		return fmt.Sprintf("{%s(%s) TH:%s HANDLING}", typ.Name(), kind, s.th)
+		return fmt.Sprintf("{%s(%s) TH:%s, %s}", typ.Name(), kind, s.th, s.handler)
 	} else {
 		return fmt.Sprintf("{%s(%s) TH:%s}", typ.Name(), kind, s.th)
 	}
@@ -91,7 +84,23 @@ type HandleContext struct {
 	// input reader
 	vr ValueReader
 	// top of stack (last handleState) is the current processing value
-	stack []*handleState
+	stack     []*handleState
+	stackPool sync.Pool
+}
+
+func NewHandleContext(r io.Reader) *HandleContext {
+	vr, ok := r.(ValueReader)
+	if !ok {
+		vr = NewValueReader(r)
+	}
+	ctx := &HandleContext{
+		vr:    vr,
+		stack: nil,
+		stackPool: sync.Pool{New: func() interface{} {
+			return &handleState{}
+		}},
+	}
+	return ctx
 }
 
 func (ctx *HandleContext) String() string {
@@ -130,278 +139,120 @@ func (ctx *HandleContext) top() (*handleState, bool) {
 	return ctx.stack[len(ctx.stack)-1], true
 }
 
-func (ctx *HandleContext) pop() (*handleState, bool) {
-	if ctx == nil || len(ctx.stack) == 0 {
-		return nil, false
+func (ctx *HandleContext) PopState() error {
+	if len(ctx.stack) == 0 {
+		return ErrEmptyStack
 	}
 	last := ctx.stack[len(ctx.stack)-1]
 	ctx.stack = ctx.stack[:len(ctx.stack)-1]
-	return last, true
+	ctx.stackPool.Put(last)
+	return nil
 }
 
-func (ctx *HandleContext) apply(todo *Todo) error {
-	if err := todo.Validate(); err != nil {
-		return err
+func (ctx *HandleContext) PushState(val reflect.Value, th TypeHeader, length int, buf []byte, handler NestedHandler) error {
+	if !val.IsValid() {
+		return ErrInvalidValue
 	}
-	switch todo.StackTodo {
-	case StackNone:
-		// do nothing
-	case StackReplaceTop:
-		if len(ctx.stack) == 0 {
-			return ErrEmptyStack
-		}
-		if err := ctx.stack[len(ctx.stack)-1].updateValue(todo.Val); err != nil {
-			return err
-		}
-	case StackPush:
-		state, err := newState(todo.Val)
-		if err != nil {
-			return err
-		}
-		if todo.Th.IsValid() {
-			state.th = todo.Th
-			state.length = todo.Length
-			var inputs []byte
-			if len(todo.Inputs) > 0 {
-				inputs = make([]byte, len(todo.Inputs))
-				copy(inputs, todo.Inputs)
-			}
-			state.buf = inputs
-		}
-		if todo.Nested != nil {
-			state.handler = todo.Nested
-		}
-		ctx.stack = append(ctx.stack, state)
-	case StackNested:
-		if len(ctx.stack) == 0 {
-			return ErrEmptyStack
-		}
-		if ctx.stack[len(ctx.stack)-1].handler != nil {
-			return errors.New("already has nested handler")
-		}
-		ctx.stack[len(ctx.stack)-1].handler = todo.Nested
-	default:
-		// default to StackPop
-		if len(ctx.stack) == 0 {
-			return ErrEmptyStack
-		}
-		ctx.stack = ctx.stack[:len(ctx.stack)-1]
-	}
+	state := ctx.stackPool.Get().(*handleState)
+	state.val = val
+	state.typ = val.Type()
+	state.th = th
+	state.length = length
+	state.buf = buf
+	state.handler = handler
+	ctx.stack = append(ctx.stack, state)
+	return nil
+}
 
-	switch todo.DataTodo {
-	case DataSkip:
-		for i := 0; i < todo.Length; i++ {
-			if _, err := ctx.vr.Skip(); err != nil {
-				return fmt.Errorf("reader skipping %d/%d failed: %v", i, todo.Length, err)
-			}
+func (ctx *HandleContext) ReplaceStack(val reflect.Value) error {
+	if len(ctx.stack) == 0 {
+		return ErrEmptyStack
+	}
+	return ctx.stack[len(ctx.stack)-1].updateValue(val)
+}
+
+func (ctx *HandleContext) NestedStack(handler NestedHandler) error {
+	if len(ctx.stack) == 0 {
+		return ErrEmptyStack
+	}
+	if ctx.stack[len(ctx.stack)-1].handler != nil {
+		return errors.New("already has nested handler")
+	}
+	ctx.stack[len(ctx.stack)-1].handler = handler
+	return nil
+}
+
+func (ctx *HandleContext) SkipReader(length int) error {
+	for i := 0; i < length; i++ {
+		if _, err := ctx.vr.Skip(); err != nil {
+			return fmt.Errorf("reader skipping %d/%d failed: %v", i, length, err)
 		}
 	}
-
 	return nil
 }
 
 type (
-	StackOp byte
-	DataOp  byte
-
-	Todo struct {
-		StackTodo StackOp
-		DataTodo  DataOp
-		Val       reflect.Value // used if StackTodo==StackReplaceTo||StackPush
-		Th        TypeHeader    // used if StackTodo==StackPush
-		Length    int           // used if StackTodo==StackPush || DataTodo==DataSkip
-		Inputs    []byte        // used if StackTodo==StackPush
-		Nested    NestedHandler // used if StackTodo==StackPush||StackNested
+	EventHandler interface {
+		Byte(ctx *HandleContext, value reflect.Value, input byte) error
+		Zero(ctx *HandleContext, value reflect.Value) error
+		True(ctx *HandleContext, value reflect.Value) error
+		Empty(ctx *HandleContext, value reflect.Value) error
+		Array(ctx *HandleContext, value reflect.Value, length int) error
+		Number(ctx *HandleContext, value reflect.Value, isPositive bool, inputs []byte) error
+		Bytes(ctx *HandleContext, value reflect.Value, inputs []byte) error
+		Version(ctx *HandleContext, value reflect.Value, inputs ...byte) error
 	}
 
-	// the lowest level event handler which process top of the stack
-	HeaderHandler interface {
-		Byte(value reflect.Value, input byte) (*Todo, error)
-		Zero(value reflect.Value) (*Todo, error)
-		True(value reflect.Value) (*Todo, error)
-		Empty(value reflect.Value) (*Todo, error)
-		Array(value reflect.Value, length int) (*Todo, error)
-		Number(value reflect.Value, isPositive bool, inputs []byte) (*Todo, error)
-		Bytes(value reflect.Value, inputs []byte) (*Todo, error)
-		Version(value reflect.Value, inputs ...byte) (*Todo, error)
-	}
+	DefaultEventHandler struct{}
+)
 
+func (h DefaultEventHandler) Byte(_ *HandleContext, _ reflect.Value, _ byte) error {
+	return ErrUnsupported
+}
+func (h DefaultEventHandler) Zero(_ *HandleContext, _ reflect.Value) error  { return ErrUnsupported }
+func (h DefaultEventHandler) True(_ *HandleContext, _ reflect.Value) error  { return ErrUnsupported }
+func (h DefaultEventHandler) Empty(_ *HandleContext, _ reflect.Value) error { return ErrUnsupported }
+func (h DefaultEventHandler) Array(_ *HandleContext, _ reflect.Value, _ int) error {
+	return ErrUnsupported
+}
+func (h DefaultEventHandler) Number(_ *HandleContext, _ reflect.Value, _ bool, _ []byte) error {
+	return ErrUnsupported
+}
+func (h DefaultEventHandler) Bytes(_ *HandleContext, _ reflect.Value, _ []byte) error {
+	return ErrUnsupported
+}
+func (h DefaultEventHandler) Version(_ *HandleContext, _ reflect.Value, _ ...byte) error {
+	return ErrUnsupported
+}
+
+type (
 	NestedHandler interface {
 		String() string
-		Element() (*Todo, error)
+		Element(ctx *HandleContext) error
 		Index() int
 	}
-
-	DefaultHeaderHandler struct{}
 )
 
 var (
-	_systemKindHandlers = make(map[reflect.Kind]HeaderHandler)
-	_systemTypeHandlers = make(map[reflect.Type]HeaderHandler)
-
-	// popTodo = Todo{
-	// 	StackTodo: StackPop,
-	// 	Val:       reflect.Value{},
-	// }
-
-	_todoObjPool = sync.Pool{
-		New: func() interface{} {
-			return &Todo{}
-		},
-	}
+	_systemKindHandlers = make(map[reflect.Kind]EventHandler)
+	_systemTypeHandlers = make(map[reflect.Type]EventHandler)
 )
 
-func _popTodo() *Todo {
-	todo := _todoObjPool.Get().(*Todo)
-	todo.StackTodo = StackPop
-	todo.DataTodo = DataNone
-	return todo
-}
-
-func _newTodo() *Todo {
-	return _todoObjPool.Get().(*Todo)
-}
-
-func _emptyTodo() *Todo {
-	todo := _newTodo()
-	todo.StackTodo = StackNone
-	todo.DataTodo = DataNone
-	return todo
-}
-
-func _systemKindHandler(handler HeaderHandler, kinds ...reflect.Kind) {
+func _systemKindHandler(handler EventHandler, kinds ...reflect.Kind) {
 	for _, k := range kinds {
 		_systemKindHandlers[k] = handler
 	}
 }
 
-func _systemTypeHandler(handler HeaderHandler, typs ...reflect.Type) {
+func _systemTypeHandler(handler EventHandler, typs ...reflect.Type) {
 	for _, typ := range typs {
 		_systemTypeHandlers[typ] = handler
 	}
 }
 
-const (
-	StackNone       StackOp = 0
-	StackPop        StackOp = 1 // normal
-	StackReplaceTop StackOp = 2 // for reflect.Ptr
-	StackPush       StackOp = 3 // nested element
-	StackNested     StackOp = 4 // nested handler
-
-	DataNone DataOp = 0 // no op
-	DataSkip DataOp = 1 // skip reader data
-)
-
-func (o StackOp) String() string {
-	switch o {
-	case StackNone:
-		return "-"
-	case StackPop:
-		return "POP"
-	case StackReplaceTop:
-		return "REPL"
-	case StackPush:
-		return "PUSH"
-	case StackNested:
-		return "NESTED"
-	default:
-		return "N/A"
-	}
-}
-
-func (o DataOp) String() string {
-	switch o {
-	case DataNone:
-		return "-"
-	case DataSkip:
-		return "SKIP"
-	default:
-		return "N/A"
-	}
-}
-
-func (f *Todo) String() string {
-	if f == nil {
-		return "Todo<nil>"
-	}
-	if f.Nested != nil {
-		return fmt.Sprintf("Todo{Stack:%s Data:%s Val:%t NESTED}", f.StackTodo, f.DataTodo, f.Val.IsValid())
-	} else {
-		return fmt.Sprintf("Todo{Stack:%s Data:%s Val:%t}", f.StackTodo, f.DataTodo, f.Val.IsValid())
-	}
-}
-
-func (f *Todo) SetNested(nested NestedHandler) *Todo {
-	f.StackTodo = StackNested
-	f.DataTodo = DataNone
-	f.Nested = nested
-	return f
-}
-
-func (f *Todo) SetReplace(val reflect.Value) *Todo {
-	f.StackTodo = StackReplaceTop
-	f.DataTodo = DataNone
-	f.Val = val
-	return f
-}
-
-func (f *Todo) SetPush(val reflect.Value, th TypeHeader) *Todo {
-	f.StackTodo = StackPush
-	f.DataTodo = DataNone
-	f.Val = val
-	f.Th = th
-	f.Nested = nil
-	return f
-}
-
-func (f *Todo) SetSkip(length int) *Todo {
-	f.DataTodo = DataSkip
-	f.Length = length
-	return f
-}
-
-func (f *Todo) Validate() error {
-	if f == nil {
-		return errors.New("nil todo")
-	}
-	switch f.StackTodo {
-	case StackReplaceTop, StackPush:
-		if !f.Val.IsValid() {
-			return fmt.Errorf("missing reflect.Value of StackOp:%s", f.StackTodo)
-		}
-	case StackNested:
-		if f.Nested == nil {
-			return fmt.Errorf("missing NestedHandler of StateOp:%s", f.StackTodo)
-		}
-	}
-	if f.DataTodo == DataSkip && f.Length <= 0 {
-		return fmt.Errorf("invalid length of DataOp:%s", f.DataTodo)
-	}
-	return nil
-}
-
-func (h DefaultHeaderHandler) Byte(_ reflect.Value, _ byte) (*Todo, error) {
-	return nil, ErrUnsupported
-}
-func (h DefaultHeaderHandler) Zero(_ reflect.Value) (*Todo, error)  { return nil, ErrUnsupported }
-func (h DefaultHeaderHandler) True(_ reflect.Value) (*Todo, error)  { return nil, ErrUnsupported }
-func (h DefaultHeaderHandler) Empty(_ reflect.Value) (*Todo, error) { return nil, ErrUnsupported }
-func (h DefaultHeaderHandler) Array(_ reflect.Value, _ int) (*Todo, error) {
-	return nil, ErrUnsupported
-}
-func (h DefaultHeaderHandler) Number(_ reflect.Value, _ bool, _ []byte) (*Todo, error) {
-	return nil, ErrUnsupported
-}
-func (h DefaultHeaderHandler) Bytes(_ reflect.Value, _ []byte) (*Todo, error) {
-	return nil, ErrUnsupported
-}
-func (h DefaultHeaderHandler) Version(_ reflect.Value, _ ...byte) (*Todo, error) {
-	return nil, ErrUnsupported
-}
-
 type EventDecoder struct {
-	kindHandlers map[reflect.Kind]HeaderHandler
-	typeHandlers map[reflect.Type]HeaderHandler
+	kindHandlers map[reflect.Kind]EventHandler
+	typeHandlers map[reflect.Type]EventHandler
 }
 
 func (e *EventDecoder) runDecoder(r io.Reader, value reflect.Value, typ reflect.Type) (bool, error) {
@@ -440,7 +291,7 @@ func (e *EventDecoder) checkTypeOfDecoder(r io.Reader, value reflect.Value) (boo
 	return false, nil
 }
 
-func (e *EventDecoder) _getTypeHandler(typ reflect.Type) (HeaderHandler, error) {
+func (e *EventDecoder) _getTypeHandler(typ reflect.Type) (EventHandler, error) {
 	if len(e.typeHandlers) > 0 {
 		handler, exist := e.typeHandlers[typ]
 		if exist && handler != nil {
@@ -454,7 +305,7 @@ func (e *EventDecoder) _getTypeHandler(typ reflect.Type) (HeaderHandler, error) 
 	return nil, nil
 }
 
-func (e *EventDecoder) _getKindHandler(kind reflect.Kind) (HeaderHandler, error) {
+func (e *EventDecoder) _getKindHandler(kind reflect.Kind) (EventHandler, error) {
 	if len(e.kindHandlers) > 0 {
 		handler, exist := e.kindHandlers[kind]
 		if exist && handler != nil {
@@ -476,13 +327,15 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 			return nil
 		}
 		if !state.isValid() {
-			ctx.pop()
+			if err = ctx.PopState(); err != nil {
+				return err
+			}
 			continue
 		}
 
-		var todo *Todo
+		// var todo *Todo
 		if state.handler != nil {
-			todo, err = state.handler.Element()
+			err = state.handler.Element(ctx)
 			if err != nil {
 				return fmt.Errorf("rtl: element(%d) handle failed: %v, at %s",
 					state.handler.Index(), err, ctx.StackInfo())
@@ -494,7 +347,9 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 					return err
 				}
 				if isDecoder {
-					ctx.pop()
+					if err = ctx.PopState(); err != nil {
+						return err
+					}
 					continue
 				}
 
@@ -528,35 +383,29 @@ func (e *EventDecoder) handle(ctx *HandleContext) error {
 
 			switch state.th {
 			case THSingleByte:
-				todo, err = handler.Byte(state.val, byte(state.length))
+				err = handler.Byte(ctx, state.val, byte(state.length))
 			case THZeroValue:
-				todo, err = handler.Zero(state.val)
+				err = handler.Zero(ctx, state.val)
 			case THTrue:
-				todo, err = handler.True(state.val)
+				err = handler.True(ctx, state.val)
 			case THEmpty:
-				todo, err = handler.Empty(state.val)
+				err = handler.Empty(ctx, state.val)
 			case THArraySingle, THArrayMulti:
-				todo, err = handler.Array(state.val, state.length)
+				err = handler.Array(ctx, state.val, state.length)
 			case THPosNumSingle, THNegNumSingle, THPosBigInt, THNegBigInt:
-				todo, err = handler.Number(state.val, state.th == THPosNumSingle || state.th == THPosBigInt, state.buf)
+				err = handler.Number(ctx, state.val, state.th == THPosNumSingle || state.th == THPosBigInt, state.buf)
 			case THStringSingle, THStringMulti:
-				todo, err = handler.Bytes(state.val, state.buf)
+				err = handler.Bytes(ctx, state.val, state.buf)
 			case THVersion:
-				todo, err = handler.Version(state.val, byte(state.length))
+				err = handler.Version(ctx, state.val, byte(state.length))
 			case THVersionSingle:
-				todo, err = handler.Version(state.val, state.buf...)
+				err = handler.Version(ctx, state.val, state.buf...)
 			}
 
 			if err != nil {
 				return fmt.Errorf("rtl: header handle failed: %v, at %s", err, ctx.StackInfo())
 			}
 		}
-
-		if err = ctx.apply(todo); err != nil {
-			return fmt.Errorf("rtl: apply %s failed: %v", todo, err)
-		}
-
-		_todoObjPool.Put(todo)
 	}
 }
 
@@ -595,11 +444,9 @@ func (e *EventDecoder) Decode(r io.Reader, obj interface{}) error {
 		vr = NewValueReader(r)
 	}
 
-	ctx := &HandleContext{vr: vr}
-	state, err := newState(rev)
-	if err != nil {
+	ctx := NewHandleContext(vr)
+	if err := ctx.PushState(rev, THInvalid, 0, nil, nil); err != nil {
 		return err
 	}
-	ctx.stack = append(ctx.stack, state)
 	return e.handle(ctx)
 }

@@ -62,11 +62,11 @@ func (m *mapElement) String() string {
 	return fmt.Sprintf("mapElem[%d/%d]", m.dataIdx, m.dataSize)
 }
 
-func (m *mapElement) Element() (*Todo, error) {
+func (m *mapElement) Element(ctx *HandleContext) error {
 	if m.dataIdx > 0 && m.dataIdx%2 == 1 {
 		// put value
 		if !m.kValue.IsValid() || !m.vValue.IsValid() {
-			return nil, fmt.Errorf("missing k-v values when %d/%d", m.dataIdx, m.dataSize)
+			return fmt.Errorf("missing k-v values when %d/%d", m.dataIdx, m.dataSize)
 		}
 		m.val.SetMapIndex(m.kValue, m.vValue)
 		m.kValue = reflect.Value{}
@@ -75,33 +75,23 @@ func (m *mapElement) Element() (*Todo, error) {
 	m.dataIdx++
 	if m.dataIdx >= m.dataSize {
 		// map finished
-		return _popTodo(), nil
+		return ctx.PopState()
 	}
 	if m.dataIdx%2 == 0 {
 		if m.kValue.IsValid() {
-			return nil, fmt.Errorf("a valid key value already in cache when %d/%d", m.dataIdx, m.dataSize)
+			return fmt.Errorf("a valid key value already in cache when %d/%d", m.dataIdx, m.dataSize)
 		}
 		m.kValue = reflect.New(m.kType).Elem()
-		return _newTodo().SetPush(m.kValue, THInvalid), nil
-		// return &Todo{
-		// 	StackTodo: StackPush,
-		// 	Val:       m.kValue,
-		// 	Th:        THInvalid,
-		// }, nil
+		return ctx.PushState(m.kValue, THInvalid, 0, nil, nil)
 	} else {
 		if m.vValue.IsValid() {
-			return nil, fmt.Errorf("a valid v value already in cache when %d/%d", m.dataIdx, m.dataSize)
+			return fmt.Errorf("a valid v value already in cache when %d/%d", m.dataIdx, m.dataSize)
 		}
 		if !m.kValue.IsValid() {
-			return nil, fmt.Errorf("missing key value when %d/%d", m.dataIdx, m.dataSize)
+			return fmt.Errorf("missing key value when %d/%d", m.dataIdx, m.dataSize)
 		}
 		m.vValue = reflect.New(m.vType).Elem()
-		return _newTodo().SetPush(m.vValue, THInvalid), nil
-		// return &Todo{
-		// 	StackTodo: StackPush,
-		// 	Val:       m.vValue,
-		// 	Th:        THInvalid,
-		// }, nil
+		return ctx.PushState(m.vValue, THInvalid, 0, nil, nil)
 	}
 }
 
@@ -145,18 +135,13 @@ func (s *sliceElement) String() string {
 	return fmt.Sprintf("sliceElem[%d/%d]", s.dataIdx, s.dataSize)
 }
 
-func (s *sliceElement) Element() (*Todo, error) {
+func (s *sliceElement) Element(ctx *HandleContext) error {
 	s.dataIdx++
 	if s.dataIdx >= s.dataSize {
-		return _popTodo(), nil
+		return ctx.PopState()
 	}
 	evalue := s.val.Index(s.dataIdx)
-	return _newTodo().SetPush(evalue, THInvalid), nil
-	// return &Todo{
-	// 	StackTodo: StackPush,
-	// 	Val:       evalue,
-	// 	Th:        THInvalid,
-	// }, nil
+	return ctx.PushState(evalue, THInvalid, 0, nil, nil)
 }
 
 func (s *sliceElement) Index() int {
@@ -193,23 +178,21 @@ func (s *arrayElement) String() string {
 	return fmt.Sprintf("arrayElem[%d/%d->%d]", s.dataIdx, s.dataSize, s.valueSize)
 }
 
-func (s *arrayElement) Element() (*Todo, error) {
+func (s *arrayElement) Element(ctx *HandleContext) error {
 	s.dataIdx++
 	if s.dataIdx >= s.dataSize || s.dataIdx >= s.valueSize {
-		todo := _popTodo()
-		if s.dataSize > s.valueSize {
-			todo.DataTodo = DataSkip
-			todo.Length = s.dataSize - s.valueSize
+		if err := ctx.PopState(); err != nil {
+			return err
 		}
-		return todo, nil
+		if s.dataSize > s.valueSize {
+			if err := ctx.SkipReader(s.dataSize - s.valueSize); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 	evalue := s.val.Index(s.dataIdx)
-	return _newTodo().SetPush(evalue, THInvalid), nil
-	// return &Todo{
-	// 	StackTodo: StackPush,
-	// 	Val:       evalue,
-	// 	Th:        THInvalid,
-	// }, nil
+	return ctx.PushState(evalue, THInvalid, 0, nil, nil)
 }
 
 func (s *arrayElement) Index() int {
@@ -253,21 +236,13 @@ func (s *string2ArraySlice) String() string {
 	return fmt.Sprintf("string2Array[%d/%d->%d]", s.idx, len(s.buf), s.valueSize)
 }
 
-func (s *string2ArraySlice) Element() (*Todo, error) {
+func (s *string2ArraySlice) Element(ctx *HandleContext) error {
 	s.idx++
 	if s.idx >= s.valueSize || s.idx >= len(s.buf) {
-		return _popTodo(), nil
+		return ctx.PopState()
 	}
 	evalue := s.val.Index(s.idx)
-	todo := _newTodo().SetPush(evalue, THSingleByte)
-	todo.Length = int(s.buf[s.idx])
-	return todo, nil
-	// return &Todo{
-	// 	StackTodo: StackPush,
-	// 	Val:       evalue,
-	// 	Th:        THSingleByte,
-	// 	Length:    int(s.buf[s.idx]),
-	// }, nil
+	return ctx.PushState(evalue, THSingleByte, int(s.buf[s.idx]), nil, nil)
 }
 
 func (s *string2ArraySlice) Index() int {
@@ -307,7 +282,7 @@ func (s *structElement) String() string {
 	return fmt.Sprintf("structElem[%d/%d->%d/%d]", s.dataIdx, s.dataSize, s.fieldIdx, len(s.fields))
 }
 
-func (s *structElement) Element() (*Todo, error) {
+func (s *structElement) Element(ctx *HandleContext) error {
 	nextField := s.fieldIdx + 1
 	if nextField < len(s.fields) {
 		fieldOrder := s.fields[nextField].order
@@ -316,17 +291,11 @@ func (s *structElement) Element() (*Todo, error) {
 			if s.dataIdx == fieldOrder {
 				fvalue := s.val.Field(s.fields[nextField].index)
 				s.fieldIdx = nextField
-				return _newTodo().SetPush(fvalue, THInvalid), nil
-				// return &Todo{
-				// 	StackTodo: StackPush,
-				// 	Val:       fvalue,
-				// 	Th:        THInvalid,
-				// }, nil
+				return ctx.PushState(fvalue, THInvalid, 0, nil, nil)
 			} else if s.dataIdx < fieldOrder {
-				return _emptyTodo().SetSkip(1), nil
-				// return &Todo{DataTodo: DataSkip, Length: 1}, nil
+				return ctx.SkipReader(1)
 			} else {
-				return nil, fmt.Errorf("illegal status found: dataIdx:%d fieldIdx:%d %s",
+				return fmt.Errorf("illegal status found: dataIdx:%d fieldIdx:%d %s",
 					s.dataIdx, nextField, s.fields[nextField])
 			}
 		}
@@ -341,14 +310,12 @@ func (s *structElement) Element() (*Todo, error) {
 
 	if s.dataIdx < s.dataSize-1 {
 		// skip datas and pop stack
-		return _popTodo().SetSkip(s.dataSize - 1 - s.dataIdx), nil
-		// return &Todo{
-		// 	StackTodo: StackPop,
-		// 	DataTodo:  DataSkip,
-		// 	Length:    s.dataSize - 1 - s.dataIdx,
-		// }, nil
+		if err := ctx.PopState(); err != nil {
+			return err
+		}
+		return ctx.SkipReader(s.dataSize - 1 - s.dataIdx)
 	} else {
-		return _popTodo(), nil
+		return ctx.PopState()
 	}
 }
 

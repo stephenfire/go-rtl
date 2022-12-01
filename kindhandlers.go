@@ -173,7 +173,7 @@ func (mapHandler) Empty(ctx *HandleContext, value reflect.Value) error {
 }
 
 func (mapHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
-	nested, err := newMapElement(value, length)
+	nested, err := newMapElement(ctx, value, length)
 	if err != nil {
 		return fmt.Errorf("new map nested handler failed: %v", err)
 	}
@@ -186,7 +186,7 @@ func (structHandler) Zero(ctx *HandleContext, value reflect.Value) error {
 }
 
 func (structHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
-	nested, err := newStructElement(value, length)
+	nested, err := newStructElement(ctx, value, length)
 	if err != nil {
 		return fmt.Errorf("new struct nested handler failed: %v", err)
 	}
@@ -199,7 +199,7 @@ func (a arrayHandler) _bytes(ctx *HandleContext, value reflect.Value, inputs ...
 		reflect.Copy(value, reflect.ValueOf(inputs))
 		return ctx.PopState()
 	} else {
-		nested, err := newString2ArraySlice(value, inputs)
+		nested, err := newString2ArraySlice(ctx, value, inputs)
 		if err != nil {
 			return fmt.Errorf("new string 2 array nested handler failed: %v", err)
 		}
@@ -221,7 +221,7 @@ func (a arrayHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []by
 }
 
 func (a arrayHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
-	nested, err := newArrayElement(value, length)
+	nested, err := newArrayElement(ctx, value, length)
 	if err != nil {
 		return fmt.Errorf("new array nested handler failed: %v", err)
 	}
@@ -235,7 +235,7 @@ func (s sliceHandler) _bytes(ctx *HandleContext, value reflect.Value, inputs ...
 		reflect.Copy(value, reflect.ValueOf(inputs))
 		return ctx.PopState()
 	} else {
-		nested, err := newString2ArraySlice(value, inputs)
+		nested, err := newString2ArraySlice(ctx, value, inputs)
 		if err != nil {
 			return fmt.Errorf("new string 2 slice nested handler failed: %v", err)
 		}
@@ -265,7 +265,7 @@ func (s sliceHandler) Bytes(ctx *HandleContext, value reflect.Value, inputs []by
 }
 
 func (s sliceHandler) Array(ctx *HandleContext, value reflect.Value, length int) error {
-	nested, err := newSliceElement(value, length)
+	nested, err := newSliceElement(ctx, value, length)
 	if err != nil {
 		return fmt.Errorf("new slice nested handler failed: %v", err)
 	}

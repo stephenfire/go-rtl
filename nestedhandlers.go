@@ -30,7 +30,9 @@ type mapElement struct {
 	kValue, vValue reflect.Value
 }
 
-func newMapElement(val reflect.Value, size int) (*mapElement, error) {
+var typeOfMapElement = reflect.TypeOf((*mapElement)(nil)).Elem()
+
+func newMapElement(ctx *HandleContext, val reflect.Value, size int) (*mapElement, error) {
 	if !val.IsValid() {
 		return nil, ErrInvalidValue
 	}
@@ -46,13 +48,21 @@ func newMapElement(val reflect.Value, size int) (*mapElement, error) {
 	}
 	ktyp := typ.Key()
 	vtyp := typ.Elem()
-	return &mapElement{
-		val:      val,
-		dataSize: size,
-		dataIdx:  -1,
-		kType:    ktyp,
-		vType:    vtyp,
-	}, nil
+	ret := ctx.NewNested(typeOfMapElement).(*mapElement)
+	ret.val = val
+	ret.dataSize = size
+	ret.dataIdx = -1
+	ret.kType = ktyp
+	ret.vType = vtyp
+	// ctx._count("mapElement")
+	return ret, nil
+	// return &mapElement{
+	// 	val:      val,
+	// 	dataSize: size,
+	// 	dataIdx:  -1,
+	// 	kType:    ktyp,
+	// 	vType:    vtyp,
+	// }, nil
 }
 
 func (m *mapElement) String() string {
@@ -105,7 +115,9 @@ type sliceElement struct {
 	dataIdx  int
 }
 
-func newSliceElement(val reflect.Value, size int) (*sliceElement, error) {
+var typeOfsliceElement = reflect.TypeOf((*sliceElement)(nil)).Elem()
+
+func newSliceElement(ctx *HandleContext, val reflect.Value, size int) (*sliceElement, error) {
 	if !val.IsValid() {
 		return nil, ErrInvalidValue
 	}
@@ -121,11 +133,17 @@ func newSliceElement(val reflect.Value, size int) (*sliceElement, error) {
 	if size != val.Len() {
 		val.SetLen(size)
 	}
-	return &sliceElement{
-		val:      val,
-		dataSize: size,
-		dataIdx:  -1,
-	}, nil
+	ret := ctx.NewNested(typeOfsliceElement).(*sliceElement)
+	ret.val = val
+	ret.dataIdx = -1
+	ret.dataSize = size
+	// ctx._count("sliceElement")
+	return ret, nil
+	// return &sliceElement{
+	// 	val:      val,
+	// 	dataSize: size,
+	// 	dataIdx:  -1,
+	// }, nil
 }
 
 func (s *sliceElement) String() string {
@@ -155,7 +173,9 @@ type arrayElement struct {
 	valueSize int
 }
 
-func newArrayElement(val reflect.Value, size int) (*arrayElement, error) {
+var typeOfArrayElement = reflect.TypeOf((*arrayElement)(nil)).Elem()
+
+func newArrayElement(ctx *HandleContext, val reflect.Value, size int) (*arrayElement, error) {
 	if !val.IsValid() {
 		return nil, ErrInvalidValue
 	}
@@ -163,12 +183,19 @@ func newArrayElement(val reflect.Value, size int) (*arrayElement, error) {
 	if typ.Kind() != reflect.Array {
 		return nil, errors.New("not an array")
 	}
-	return &arrayElement{
-		val:       val,
-		dataSize:  size,
-		dataIdx:   -1,
-		valueSize: val.Len(),
-	}, nil
+	ret := ctx.NewNested(typeOfArrayElement).(*arrayElement)
+	ret.val = val
+	ret.dataSize = size
+	ret.dataIdx = -1
+	ret.valueSize = val.Len()
+	// ctx._count("arrayElement")
+	return ret, nil
+	// return &arrayElement{
+	// 	val:       val,
+	// 	dataSize:  size,
+	// 	dataIdx:   -1,
+	// 	valueSize: val.Len(),
+	// }, nil
 }
 
 func (s *arrayElement) String() string {
@@ -206,7 +233,9 @@ type string2ArraySlice struct {
 	valueSize int
 }
 
-func newString2ArraySlice(val reflect.Value, buf []byte) (*string2ArraySlice, error) {
+var typeOfString2ArraySlice = reflect.TypeOf((*string2ArraySlice)(nil)).Elem()
+
+func newString2ArraySlice(ctx *HandleContext, val reflect.Value, buf []byte) (*string2ArraySlice, error) {
 	if !val.IsValid() {
 		return nil, ErrInvalidValue
 	}
@@ -221,12 +250,19 @@ func newString2ArraySlice(val reflect.Value, buf []byte) (*string2ArraySlice, er
 	if kind == reflect.Slice {
 		checkSlice0(len(buf), val)
 	}
-	return &string2ArraySlice{
-		val:       val,
-		buf:       buf,
-		idx:       -1,
-		valueSize: val.Len(),
-	}, nil
+	ret := ctx.NewNested(typeOfString2ArraySlice).(*string2ArraySlice)
+	ret.val = val
+	ret.buf = buf
+	ret.idx = -1
+	ret.valueSize = val.Len()
+	// ctx._count("string2ArraySlice")
+	return ret, nil
+	// return &string2ArraySlice{
+	// 	val:       val,
+	// 	buf:       buf,
+	// 	idx:       -1,
+	// 	valueSize: val.Len(),
+	// }, nil
 }
 
 func (s *string2ArraySlice) String() string {
@@ -257,7 +293,9 @@ type structElement struct {
 	fieldIdx int         // the last processed field index of the structure
 }
 
-func newStructElement(val reflect.Value, size int) (*structElement, error) {
+var typeOfStructElement = reflect.TypeOf((*structElement)(nil)).Elem()
+
+func newStructElement(ctx *HandleContext, val reflect.Value, size int) (*structElement, error) {
 	if !val.IsValid() {
 		return nil, ErrInvalidValue
 	}
@@ -266,13 +304,21 @@ func newStructElement(val reflect.Value, size int) (*structElement, error) {
 		return nil, errors.New("not a struct")
 	}
 	_, fields := structFields(typ)
-	return &structElement{
-		val:      val,
-		dataSize: size,
-		dataIdx:  -1,
-		fields:   fields,
-		fieldIdx: -1,
-	}, nil
+	ret := ctx.NewNested(typeOfStructElement).(*structElement)
+	ret.val = val
+	ret.dataSize = size
+	ret.dataIdx = -1
+	ret.fields = fields
+	ret.fieldIdx = -1
+	// ctx._count("structElement")
+	return ret, nil
+	// return &structElement{
+	// 	val:      val,
+	// 	dataSize: size,
+	// 	dataIdx:  -1,
+	// 	fields:   fields,
+	// 	fieldIdx: -1,
+	// }, nil
 }
 
 func (s *structElement) String() string {

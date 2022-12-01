@@ -84,9 +84,16 @@ type HandleContext struct {
 	// input reader
 	vr ValueReader
 	// top of stack (last handleState) is the current processing value
-	stack     []*handleState
-	stackPool sync.Pool
+	stack       []*handleState
+	stackPool   sync.Pool
+	nestedPools map[reflect.Type]*sync.Pool
+	// counter     map[string]int
 }
+
+// func (ctx *HandleContext) _count(name string) {
+// 	c := ctx.counter[name]
+// 	ctx.counter[name] = c + 1
+// }
 
 func NewHandleContext(r io.Reader) *HandleContext {
 	vr, ok := r.(ValueReader)
@@ -99,6 +106,7 @@ func NewHandleContext(r io.Reader) *HandleContext {
 		stackPool: sync.Pool{New: func() interface{} {
 			return &handleState{}
 		}},
+		// counter: make(map[string]int),
 	}
 	return ctx
 }
@@ -108,6 +116,7 @@ func (ctx *HandleContext) String() string {
 		return "Ctx<nil>"
 	}
 	if len(ctx.stack) == 0 {
+		// return fmt.Sprintf("Ctx{%v}", ctx.counter)
 		return "Ctx{}"
 	}
 	return fmt.Sprintf("Ctx{Stack:%d Top:%s}", len(ctx.stack), ctx.stack[len(ctx.stack)-1])
@@ -145,7 +154,17 @@ func (ctx *HandleContext) PopState() error {
 	}
 	last := ctx.stack[len(ctx.stack)-1]
 	ctx.stack = ctx.stack[:len(ctx.stack)-1]
+
+	if last.handler != nil {
+		typ := reflect.TypeOf(last.handler)
+		nestedPool, exist := ctx.nestedPools[typ]
+		if exist && nestedPool != nil {
+			nestedPool.Put(last.handler)
+		}
+		last.handler = nil
+	}
 	ctx.stackPool.Put(last)
+	// ctx._count("pop")
 	return nil
 }
 
@@ -161,6 +180,7 @@ func (ctx *HandleContext) PushState(val reflect.Value, th TypeHeader, length int
 	state.buf = buf
 	state.handler = handler
 	ctx.stack = append(ctx.stack, state)
+	// ctx._count("push")
 	return nil
 }
 
@@ -168,6 +188,7 @@ func (ctx *HandleContext) ReplaceStack(val reflect.Value) error {
 	if len(ctx.stack) == 0 {
 		return ErrEmptyStack
 	}
+	// ctx._count("replace")
 	return ctx.stack[len(ctx.stack)-1].updateValue(val)
 }
 
@@ -179,6 +200,7 @@ func (ctx *HandleContext) NestedStack(handler NestedHandler) error {
 		return errors.New("already has nested handler")
 	}
 	ctx.stack[len(ctx.stack)-1].handler = handler
+	// ctx._count("nested")
 	return nil
 }
 
@@ -188,7 +210,24 @@ func (ctx *HandleContext) SkipReader(length int) error {
 			return fmt.Errorf("reader skipping %d/%d failed: %v", i, length, err)
 		}
 	}
+	// ctx._count("skip")
 	return nil
+}
+
+func (ctx *HandleContext) NewNested(typ reflect.Type) interface{} {
+	if ctx.nestedPools == nil {
+		ctx.nestedPools = make(map[reflect.Type]*sync.Pool)
+	}
+	pool, exist := ctx.nestedPools[typ]
+	if !exist || pool == nil {
+		pool = &sync.Pool{New: func() interface{} {
+			val := reflect.New(typ)
+			// ctx._count(fmt.Sprintf("new(%s)", typ.Name()))
+			return val.Interface()
+		}}
+		ctx.nestedPools[typ] = pool
+	}
+	return pool.Get()
 }
 
 type (
@@ -448,5 +487,7 @@ func (e *EventDecoder) Decode(r io.Reader, obj interface{}) error {
 	if err := ctx.PushState(rev, THInvalid, 0, nil, nil); err != nil {
 		return err
 	}
-	return e.handle(ctx)
+	err = e.handle(ctx)
+	// log.Printf("%s", ctx)
+	return err
 }

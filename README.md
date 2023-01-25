@@ -177,7 +177,7 @@ import "github.com/stephenfire/go-rtl"
 
 ### 6. 结构类型的版本兼容性
 
-通过使用标记 *rtlorder* 对结构属性进行排序。
+通过使用标记 *rtlorder* 对结构属性进行排序。缺省为按定义顺序从0开始递增的值。
 
 序列化时，按rtlorder的顺序写入buffer，遇到不连续的情况时，用ZeroValue占位。
 

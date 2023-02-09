@@ -419,6 +419,8 @@ func structWriter0(w io.Writer, v reflect.Value, nesting int) (int, error) {
 		return 0, ErrNestingOverflow
 	}
 
+	fnum, fnames = versionedFields(v, fnames)
+
 	h, err := HeadMaker.array(fnum)
 	if err != nil {
 		return 0, err

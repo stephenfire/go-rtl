@@ -391,13 +391,14 @@ func (h headMaker) version(version uint64) ([]byte, error) {
 }
 
 type fieldName struct {
-	index int
-	name  string
-	order int
+	index   int
+	name    string
+	order   int
+	version int
 }
 
 func (f fieldName) String() string {
-	return fmt.Sprintf("field{%d-%s, order:%d}", f.index, f.name, f.order)
+	return fmt.Sprintf("field{%d-%s, order:%d, version:%d}", f.index, f.name, f.order, f.version)
 }
 
 func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
@@ -430,14 +431,34 @@ func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
 			tagStr = strings.TrimSpace(tagStr)
 			if len(tagStr) > 0 {
 				if oi, err := strconv.Atoi(tagStr); err != nil {
-					panic(fmt.Sprintf("illegal rtlorder (%s) for field %s of type %s",
+					panic(fmt.Errorf("illegal rtlorder (%s) for field %s of type %s",
 						tagStr, f.Name, typ.Name()))
 				} else {
+					if oi < 0 {
+						panic(fmt.Errorf("illegal rtlorder (%s) for field %s of type %s",
+							tagStr, f.Name, typ.Name()))
+					}
 					order = oi
 				}
 			}
 
-			fields = append(fields, fieldName{i, f.Name, order})
+			version := -1
+			tagStr = f.Tag.Get("rtlversion")
+			tagStr = strings.TrimSpace(tagStr)
+			if len(tagStr) > 0 {
+				if oi, err := strconv.Atoi(tagStr); err != nil {
+					panic(fmt.Errorf("illegal rtlversion (%s) for filed %s of type %s",
+						tagStr, f.Name, typ.Name()))
+				} else {
+					if oi < 0 {
+						panic(fmt.Errorf("illegal rtlversion (%s) for filed %s of type %s",
+							tagStr, f.Name, typ.Name()))
+					}
+					version = oi
+				}
+			}
+
+			fields = append(fields, fieldName{i, f.Name, order, version})
 		}
 	}
 	sort.SliceStable(fields, func(i, j int) bool {
@@ -454,10 +475,25 @@ func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
 			fields[i].order = i
 		} else {
 			if fields[i].order < i {
-				panic(fmt.Sprintf("illegal rtlorder (%d) for field %s of type %s, should >= %d",
+				panic(fmt.Errorf("illegal rtlorder (%d) for field %s of type %s, should >= %d",
 					fields[i].order, fields[i].name, typ.Name(), i))
 			}
-			break
+			// // fields have been orderred by order, there's no field.order < i
+			// break
+		}
+		if fields[i].version < 0 {
+			if i == 0 {
+				fields[i].version = 0
+			} else {
+				fields[i].version = fields[i-1].version
+			}
+		} else {
+			if i > 0 {
+				if fields[i].version < fields[i-1].version {
+					panic(fmt.Errorf("illegal rtlversion (%d) for field %s of type %s, should >= %d",
+						fields[i].version, fields[i].name, typ.Name(), fields[i-1].version))
+				}
+			}
 		}
 	}
 	// fmt.Printf("%s -> %s\n", typ.Name(), fields)
@@ -467,6 +503,31 @@ func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
 		fieldNum = fields[len(fields)-1].order + 1
 	}
 	return
+}
+
+func versionedFields(val reflect.Value, fields []fieldName) (int, []fieldName) {
+	if len(fields) == 0 {
+		return 0, nil
+	}
+	max := len(fields) - 1
+	maxVersion := fields[max].version
+	if maxVersion == 0 || maxVersion == fields[0].version {
+		return fields[max].order + 1, fields
+	}
+	for i := len(fields) - 1; i >= 0; i-- {
+		if maxVersion > fields[i].version {
+			maxVersion = fields[i].version
+			max = i
+		}
+		if maxVersion == 0 {
+			break
+		}
+		if v := val.Field(fields[i].index); v.IsZero() {
+			continue
+		}
+		break
+	}
+	return fields[max].order + 1, fields[:max+1]
 }
 
 type StructCodec struct {

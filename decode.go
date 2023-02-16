@@ -45,10 +45,10 @@ func DecodeV1(r io.Reader, v interface{}) error {
 		return ErrDecodeIntoNil
 	}
 
-	// isDecoder, err := checkTypeOfDecoder(r, rv)
-	// if isDecoder || err != nil {
-	// 	return err
-	// }
+	isDecoder, err := checkTypeOfDecoder(r, rv)
+	if isDecoder || err != nil {
+		return err
+	}
 
 	rev := rv.Elem()
 	vr, ok := r.(ValueReader)

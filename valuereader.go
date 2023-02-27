@@ -87,7 +87,7 @@ func (r *defaultVR) ReadFullHeader() (TypeHeader, int, error) {
 		if err != nil {
 			return 0, 0, err
 		}
-		if l > math.MaxInt {
+		if l > math.MaxInt32 {
 			return 0, 0, errors.New("full length overflow")
 		}
 		return th, int(l), nil

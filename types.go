@@ -391,9 +391,11 @@ func (h headMaker) version(version uint64) ([]byte, error) {
 }
 
 type fieldName struct {
-	index   int
-	name    string
-	order   int
+	index int
+	name  string
+	order int
+	// version is used to distinguish the fields added in different versions of the struct type upgrade
+	// version can only increase sequentially
 	version int
 }
 
@@ -505,6 +507,8 @@ func structFields(typ reflect.Type) (fieldNum int, fields []fieldName) {
 	return
 }
 
+// When any field under a certain version is not a zero value, all fields not greater than this version are reserved.
+// All fields with version==0 will be reserved
 func versionedFields(val reflect.Value, fields []fieldName) (int, []fieldName) {
 	if len(fields) == 0 {
 		return 0, nil

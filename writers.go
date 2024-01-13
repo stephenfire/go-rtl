@@ -20,12 +20,11 @@ import (
 	"fmt"
 	"io"
 	"math"
-	"math/big"
 	"reflect"
 )
 
 // writerFunc encode v as bytes write to w, returns the length of bytes it write
-type writerFunc func(w *io.Writer, v reflect.Value) (int, error)
+type writerFunc func(w io.Writer, v reflect.Value) (int, error)
 
 func valueWriter(w io.Writer, value reflect.Value) (int, error) {
 	return valueWriter0(w, value, 0)
@@ -44,17 +43,10 @@ func valueWriter0(w io.Writer, value reflect.Value, nesting int) (int, error) {
 		return 0, encoder.Serialization(w)
 	}
 
-	// big.Int
-	if typ.AssignableTo(typeOfBigInt) {
-		return bigIntWriter(w, value)
-	}
-
-	// big.Rat / big.Float
-	if typ.AssignableTo(typeOfBigRat) {
-		return bigRatWriter(w, value)
-	}
-	if typ.AssignableTo(typeOfBigFloat) {
-		return bigFloatWriter(w, value)
+	if matched, n, err := checkPriorStructsWriter(w, value); err != nil {
+		return n, err
+	} else if matched {
+		return n, err
 	}
 
 	kind := value.Kind()
@@ -214,64 +206,6 @@ func intWriter(w io.Writer, v reflect.Value) (int, error) {
 		i = -i
 	}
 	return smallNumberWriter(w, isNegative, uint64(i))
-}
-
-func bigIntWriter(w io.Writer, v reflect.Value) (int, error) {
-	bi := v.Interface().(big.Int)
-
-	if !(bi.Sign() < 0) && bi.Cmp(bigint128) < 0 {
-		// 0 < bi <128, use one single byte value
-		return w.Write([]byte{byte(bi.Uint64())})
-	}
-
-	// big int
-	negative, b := Numeric.BigIntToBytes(&bi)
-	h, err := HeadMaker.numeric(negative, len(b))
-	if err != nil {
-		return 0, err
-	}
-	n, err := w.Write(h)
-	if err != nil {
-		return n, err
-	}
-	nn, err := w.Write(b)
-	return n + nn, err
-}
-
-func bigRatWriter(w io.Writer, v reflect.Value) (int, error) {
-	br := v.Interface().(big.Rat)
-	b, err := br.GobEncode()
-	if err != nil {
-		return 0, err
-	}
-	h, err := HeadMaker.numeric(false, len(b))
-	if err != nil {
-		return 0, err
-	}
-	n, err := w.Write(h)
-	if err != nil {
-		return n, err
-	}
-	nn, err := w.Write(b)
-	return n + nn, err
-}
-
-func bigFloatWriter(w io.Writer, v reflect.Value) (int, error) {
-	br := v.Interface().(big.Float)
-	b, err := br.GobEncode()
-	if err != nil {
-		return 0, err
-	}
-	h, err := HeadMaker.numeric(false, len(b))
-	if err != nil {
-		return 0, err
-	}
-	n, err := w.Write(h)
-	if err != nil {
-		return n, err
-	}
-	nn, err := w.Write(b)
-	return n + nn, err
 }
 
 func float32Writer(w io.Writer, v reflect.Value) (int, error) {

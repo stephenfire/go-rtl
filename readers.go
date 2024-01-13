@@ -562,20 +562,10 @@ func valueReader1(th TypeHeader, length int, vr ValueReader, value reflect.Value
 
 	typ := value.Type()
 
-	// big.Int or *big.Int
-	if typ.AssignableTo(typeOfBigInt) || typ.AssignableTo(reflect.PtrTo(typeOfBigInt)) {
-		return bigIntReader0(th, length, vr, value, nesting)
-	}
-
-	// big.Rat or *big.Rat
-	if typ.AssignableTo(typeOfBigRat) || typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
-		return bigRatReader0(th, length, vr, value, nesting)
-	}
-
-	// big.Float or *big.Float
-	if typ.AssignableTo(typeOfBigFloat) || typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
-		// if typ.AssignableTo(typeOfBigFloatPtr) {
-		return bigFloatReader0(th, length, vr, value, nesting)
+	if matched, err := checkPriorStructsReader(th, length, vr, value, nesting); err != nil {
+		return err
+	} else if matched {
+		return err
 	}
 
 	kind := value.Kind()
@@ -769,57 +759,6 @@ func toInterfaces(typ reflect.Type, kind reflect.Kind, th TypeHeader, length int
 		return arrayMultiToArray0(int(l), vr, slice, nesting)
 	}
 	return fmt.Errorf("rtl: unsupported type6 %v (kind: %s, headerType: %s) for decoding", typ, kind, th)
-}
-
-func bigIntReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
-	typ := value.Type()
-
-	// big.Int
-	if typ.AssignableTo(typeOfBigInt) {
-		f := getFunc(typ, bigIntReaders, th)
-		return f(length, vr, value.Addr(), nesting)
-	}
-	// *big.Int
-	if typ.AssignableTo(reflect.PtrTo(typeOfBigInt)) {
-		f := getFunc(typ, bigIntReaders, th)
-		return f(length, vr, value, nesting)
-	}
-
-	return fmt.Errorf("rtl: should be big.Int or *big.Int, but %s", typ.Name())
-}
-
-func bigRatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
-	typ := value.Type()
-
-	// big.Rat
-	if typ.AssignableTo(typeOfBigRat) {
-		f := getFunc(typ, bigRatReaders, th)
-		return f(length, vr, value.Addr(), nesting)
-	}
-	// *big.Rat
-	if typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
-		f := getFunc(typ, bigRatReaders, th)
-		return f(length, vr, value, nesting)
-	}
-
-	return fmt.Errorf("rtl: should be big.Rat or *big.Rat, but %s", typ.Name())
-}
-
-func bigFloatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
-	typ := value.Type()
-
-	// big.Float
-	if typ.AssignableTo(typeOfBigFloat) {
-		f := getFunc(typ, bigFloatReaders, th)
-		return f(length, vr, value.Addr(), nesting)
-	}
-	// *big.Float
-	if typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
-		f := getFunc(typ, bigFloatReaders, th)
-		return f(length, vr, value, nesting)
-	}
-
-	return fmt.Errorf("rtl: should be big.Float or *big.Float, but %s", typ.Name())
 }
 
 func typedReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int,

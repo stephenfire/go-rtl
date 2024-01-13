@@ -513,15 +513,15 @@ func versionedFields(val reflect.Value, fields []fieldName) (int, []fieldName) {
 	if len(fields) == 0 {
 		return 0, nil
 	}
-	max := len(fields) - 1
-	maxVersion := fields[max].version
+	maxIndex := len(fields) - 1
+	maxVersion := fields[maxIndex].version
 	if maxVersion == 0 || maxVersion == fields[0].version {
-		return fields[max].order + 1, fields
+		return fields[maxIndex].order + 1, fields
 	}
 	for i := len(fields) - 1; i >= 0; i-- {
 		if maxVersion > fields[i].version {
 			maxVersion = fields[i].version
-			max = i
+			maxIndex = i
 		}
 		if maxVersion == 0 {
 			break
@@ -531,7 +531,7 @@ func versionedFields(val reflect.Value, fields []fieldName) (int, []fieldName) {
 		}
 		break
 	}
-	return fields[max].order + 1, fields[:max+1]
+	return fields[maxIndex].order + 1, fields[:maxIndex+1]
 }
 
 type StructCodec struct {

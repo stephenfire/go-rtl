@@ -17,6 +17,8 @@
 package rtl
 
 import (
+	"encoding"
+	"errors"
 	"fmt"
 	"reflect"
 )
@@ -24,10 +26,39 @@ import (
 type headerValueReader func(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error
 
 var (
-	_priorStructReaders = map[reflect.Type]headerValueReader{
-		typeOfBigInt:   bigIntReader0,
-		typeOfBigRat:   bigRatReader0,
-		typeOfBigFloat: bigFloatReader0,
+	_priorStructReaders = map[reflect.Type]map[TypeHeader]typeReaderFunc{
+		typeOfBigInt:   bigIntReaders,
+		typeOfBigRat:   bigRatReaders,
+		typeOfBigFloat: bigFloatReaders,
+		typeOfTime:     binaryUnmarshalerReaders,
+	}
+
+	binaryUnmarshalerReaders = map[TypeHeader]typeReaderFunc{
+		THSingleByte: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
+			return setToBinaryUnmarshaler(value, []byte{byte(length)})
+		},
+		THZeroValue: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
+			value.Set(reflect.Zero(value.Type()))
+			return nil
+		},
+		THStringSingle: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
+			buf, err := vr.ReadBytes(length, nil)
+			if err != nil {
+				return err
+			}
+			return setToBinaryUnmarshaler(value, buf)
+		},
+		THStringMulti: func(length int, vr ValueReader, value reflect.Value, nesting int) error {
+			l, err := vr.ReadMultiLength(length)
+			if err != nil {
+				return err
+			}
+			buf, err := vr.ReadBytes(int(l), nil)
+			if err != nil {
+				return err
+			}
+			return setToBinaryUnmarshaler(value, buf)
+		},
 	}
 )
 
@@ -35,9 +66,14 @@ func checkPriorStructsReader(th TypeHeader, length int, vr ValueReader, value re
 	typ := value.Type()
 	for _, prior := range _priorStructOrder {
 		if typ.AssignableTo(prior) || typ.AssignableTo(reflect.PtrTo(prior)) {
-			fn, exist := _priorStructReaders[prior]
+			readers, exist := _priorStructReaders[prior]
 			if exist {
-				err = fn(th, length, vr, value, nesting)
+				fn := getFunc(typ, readers, th)
+				if typ.AssignableTo(prior) {
+					err = fn(length, vr, value.Addr(), nesting)
+				} else {
+					err = fn(length, vr, value, nesting)
+				}
 				return true, err
 			}
 		}
@@ -62,36 +98,48 @@ func bigIntReader0(th TypeHeader, length int, vr ValueReader, value reflect.Valu
 	return fmt.Errorf("rtl: should be big.Int or *big.Int, but %s", typ.Name())
 }
 
-func bigRatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
-	typ := value.Type()
+// func bigRatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
+// 	typ := value.Type()
+//
+// 	// big.Rat
+// 	if typ.AssignableTo(typeOfBigRat) {
+// 		f := getFunc(typ, bigRatReaders, th)
+// 		return f(length, vr, value.Addr(), nesting)
+// 	}
+// 	// *big.Rat
+// 	if typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
+// 		f := getFunc(typ, bigRatReaders, th)
+// 		return f(length, vr, value, nesting)
+// 	}
+//
+// 	return fmt.Errorf("rtl: should be big.Rat or *big.Rat, but %s", typ.Name())
+// }
+//
+// func bigFloatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
+// 	typ := value.Type()
+//
+// 	// big.Float
+// 	if typ.AssignableTo(typeOfBigFloat) {
+// 		f := getFunc(typ, bigFloatReaders, th)
+// 		return f(length, vr, value.Addr(), nesting)
+// 	}
+// 	// *big.Float
+// 	if typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
+// 		f := getFunc(typ, bigFloatReaders, th)
+// 		return f(length, vr, value, nesting)
+// 	}
+//
+// 	return fmt.Errorf("rtl: should be big.Float or *big.Float, but %s", typ.Name())
+// }
 
-	// big.Rat
-	if typ.AssignableTo(typeOfBigRat) {
-		f := getFunc(typ, bigRatReaders, th)
-		return f(length, vr, value.Addr(), nesting)
+// value must be a pointer of a type, and implemented encoding.BinaryUnmarshaler
+func setToBinaryUnmarshaler(value reflect.Value, bs []byte) error {
+	if value.Kind() != reflect.Pointer {
+		return errors.New("rtl: BinaryUnmarshaler need a pointer")
 	}
-	// *big.Rat
-	if typ.AssignableTo(reflect.PtrTo(typeOfBigRat)) {
-		f := getFunc(typ, bigRatReaders, th)
-		return f(length, vr, value, nesting)
+	if value.IsNil() {
+		value.Set(reflect.New(value.Type().Elem()))
 	}
-
-	return fmt.Errorf("rtl: should be big.Rat or *big.Rat, but %s", typ.Name())
-}
-
-func bigFloatReader0(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error {
-	typ := value.Type()
-
-	// big.Float
-	if typ.AssignableTo(typeOfBigFloat) {
-		f := getFunc(typ, bigFloatReaders, th)
-		return f(length, vr, value.Addr(), nesting)
-	}
-	// *big.Float
-	if typ.AssignableTo(reflect.PtrTo(typeOfBigFloat)) {
-		f := getFunc(typ, bigFloatReaders, th)
-		return f(length, vr, value, nesting)
-	}
-
-	return fmt.Errorf("rtl: should be big.Float or *big.Float, but %s", typ.Name())
+	bu := value.Interface().(encoding.BinaryUnmarshaler)
+	return bu.UnmarshalBinary(bs)
 }

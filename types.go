@@ -26,6 +26,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 )
 
 type THValueType byte
@@ -187,6 +188,8 @@ var (
 	typeOfBigRat   = reflect.TypeOf(big.Rat{})
 	typeOfBigFloat = reflect.TypeOf(big.Float{})
 
+	typeOfTime = reflect.TypeOf((*time.Time)(nil)).Elem()
+
 	// []interface{} type
 	typeOfInterfaceSlice = reflect.TypeOf([]interface{}{})
 	typeOfInterface      = reflect.TypeOf((*interface{})(nil)).Elem()
@@ -325,8 +328,8 @@ func (h headMaker) numeric(isNegative bool, length int) ([]byte, error) {
 
 	if length <= 8 {
 		r := make([]byte, 1)
-		h.numericBuf(isNegative, length, r)
-		return r, nil
+		_, err := h.numericBuf(isNegative, length, r)
+		return r, err
 	}
 
 	r := make([]byte, 9)

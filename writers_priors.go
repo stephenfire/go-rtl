@@ -17,6 +17,7 @@
 package rtl
 
 import (
+	"encoding"
 	"encoding/gob"
 	"io"
 	"math/big"
@@ -28,12 +29,14 @@ var (
 		typeOfBigInt:   bigIntWriter,
 		typeOfBigRat:   gobEncoderNumberWriter,
 		typeOfBigFloat: gobEncoderNumberWriter,
+		typeOfTime:     binaryMarshalerBytesWriter,
 	}
 
 	_priorStructOrder = []reflect.Type{
 		typeOfBigInt,
 		typeOfBigRat,
 		typeOfBigFloat,
+		typeOfTime,
 	}
 )
 
@@ -84,4 +87,13 @@ func gobEncoderNumberWriter(w io.Writer, v reflect.Value) (int, error) {
 		return 0, err
 	}
 	return _writeNumberBytes(w, false, b)
+}
+
+func binaryMarshalerBytesWriter(w io.Writer, v reflect.Value) (int, error) {
+	bm := v.Interface().(encoding.BinaryMarshaler)
+	b, err := bm.MarshalBinary()
+	if err != nil {
+		return 0, err
+	}
+	return bytesWriter(w, b)
 }

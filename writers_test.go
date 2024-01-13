@@ -25,6 +25,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 )
 
 func Unhex(str string) []byte {
@@ -119,7 +120,8 @@ type hasIgnoredField struct {
 }
 
 type param struct {
-	val interface{}
+	val     interface{}
+	equaler func(a interface{}, b reflect.Value) bool
 }
 
 type mapstruct struct {
@@ -143,10 +145,20 @@ type arrayAndSlice struct {
 	B []byte
 }
 
+type timeObjects struct {
+	A time.Time
+	B *time.Time
+}
+
 var (
 	string1 = "string1"
 	string2 = "string2"
 )
+
+func timePointer() *time.Time {
+	n := time.Now()
+	return &n
+}
 
 var encTests = []param{
 
@@ -338,6 +350,31 @@ var encTests = []param{
 
 	{val: &arrayAndSlice{A: [32]byte{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, B: []byte("sssssssss")}},
 	{val: &arrayAndSlice{A: [32]byte{8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8, 8}, B: nil}},
+
+	{val: time.Now()},
+	{val: timePointer()},
+
+	{val: &timeObjects{A: time.Now(), B: timePointer()},
+		equaler: func(a interface{}, b reflect.Value) bool {
+			p := a.(*timeObjects)
+			if b.Kind() != reflect.Pointer || b.IsNil() {
+				return false
+			}
+			o := b.Interface().(*timeObjects)
+			return p.A.Equal(o.A) && o.B != nil && (*p.B).Equal(*o.B)
+		}},
+	{val: &timeObjects{A: time.Now()},
+		equaler: func(a interface{}, b reflect.Value) bool {
+			p := a.(*timeObjects)
+			if b.Kind() != reflect.Pointer || b.IsNil() {
+				return false
+			}
+			o := b.Interface().(*timeObjects)
+			if o.B != nil {
+				return false
+			}
+			return p.A.Equal(o.A)
+		}},
 }
 
 func TestEncode(t *testing.T) {
@@ -364,10 +401,38 @@ func TestEncode(t *testing.T) {
 		// }
 
 		fmt.Printf("%v: %#v\n\t%X\n%v: %#v\n", typ, test.val, bs, nvv.Type(), nvv)
-		if reflect.DeepEqual(test.val, nvv.Interface()) {
+		equaler := _valueEqualer
+		if test.equaler != nil {
+			equaler = test.equaler
+		}
+		if equaler(test.val, nvv) {
 			t.Log(test.val, "check")
 		} else {
 			t.Error(test.val, "error")
+		}
+	}
+}
+
+func _valueEqualer(a interface{}, b reflect.Value) bool {
+	switch s := a.(type) {
+	case *time.Time:
+		if b.Kind() != reflect.Pointer {
+			return false
+		}
+		if s == nil && b.IsNil() {
+			return true
+		}
+		if b.IsNil() {
+			return false
+		}
+		return (*s).Equal(b.Elem().Interface().(time.Time))
+	case time.Time:
+		return s.Equal(b.Interface().(time.Time))
+	default:
+		if reflect.DeepEqual(a, b.Interface()) {
+			return true
+		} else {
+			return false
 		}
 	}
 }

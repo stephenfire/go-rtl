@@ -30,6 +30,7 @@ func Unmarshal(buf []byte, v interface{}) error {
 // values, you should use encoding.ValueReader as io.Reader.
 func Decode(r io.Reader, v interface{}) error {
 	return DecodeV1(r, v)
+	// return DecodeV2(r, v)
 }
 
 func DecodeV1(r io.Reader, v interface{}) error {

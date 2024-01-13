@@ -41,6 +41,13 @@ type (
 	bigfloatPtrHandler struct {
 		DefaultEventHandler
 	}
+	binaryUnmarshalerHandler struct {
+		addressHandler
+		DefaultEventHandler
+	}
+	binaryUnmarshalerPtrHandler struct {
+		DefaultEventHandler
+	}
 )
 
 func init() {
@@ -50,6 +57,8 @@ func init() {
 	_systemTypeHandler(bigratPtrHandler{}, reflect.PtrTo(typeOfBigRat))
 	_systemTypeHandler(bigfloatHandler{}, typeOfBigFloat)
 	_systemTypeHandler(bigfloatPtrHandler{}, reflect.PtrTo(typeOfBigFloat))
+	_systemTypeHandler(binaryUnmarshalerHandler{}, typeOfTime)
+	_systemTypeHandler(binaryUnmarshalerPtrHandler{}, reflect.PtrTo(typeOfTime))
 }
 
 func (addressHandler) _replace(ctx *HandleContext, value reflect.Value) error {
@@ -134,6 +143,38 @@ func (bigfloatPtrHandler) Number(ctx *HandleContext, value reflect.Value, isPosi
 	}
 	f := getOrNewBigFloat(value)
 	if err := f.GobDecode(inputs); err != nil {
+		return err
+	}
+	return ctx.PopState()
+}
+
+func (b binaryUnmarshalerHandler) Byte(ctx *HandleContext, value reflect.Value, _ byte) error {
+	return b._replace(ctx, value)
+}
+
+func (b binaryUnmarshalerHandler) Zero(ctx *HandleContext, value reflect.Value) error {
+	value.Set(reflect.Zero(value.Type()))
+	return ctx.PopState()
+}
+
+func (b binaryUnmarshalerHandler) Bytes(ctx *HandleContext, value reflect.Value, _ []byte) error {
+	return b._replace(ctx, value)
+}
+
+func (binaryUnmarshalerPtrHandler) Byte(ctx *HandleContext, value reflect.Value, input byte) error {
+	if err := setToBinaryUnmarshaler(value, []byte{input}); err != nil {
+		return err
+	}
+	return ctx.PopState()
+}
+
+func (binaryUnmarshalerPtrHandler) Zero(ctx *HandleContext, value reflect.Value) error {
+	value.Set(reflect.Zero(value.Type()))
+	return ctx.PopState()
+}
+
+func (binaryUnmarshalerPtrHandler) Bytes(ctx *HandleContext, value reflect.Value, input []byte) error {
+	if err := setToBinaryUnmarshaler(value, input); err != nil {
 		return err
 	}
 	return ctx.PopState()

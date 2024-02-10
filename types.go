@@ -181,12 +181,15 @@ var (
 	Numeric numeric
 
 	// big.Int
-	bigint128    = big.NewInt(128)
-	typeOfBigInt = reflect.TypeOf(big.Int{})
+	bigint128       = big.NewInt(128)
+	typeOfBigIntPtr = reflect.TypeOf((*big.Int)(nil))
+	typeOfBigInt    = typeOfBigIntPtr.Elem()
 
 	// big.Rat && big.Float
-	typeOfBigRat   = reflect.TypeOf(big.Rat{})
-	typeOfBigFloat = reflect.TypeOf(big.Float{})
+	typeOfBigRatPtr   = reflect.TypeOf((*big.Rat)(nil))
+	typeOfBigRat      = typeOfBigRatPtr.Elem()
+	typeOfBigFloatPtr = reflect.TypeOf((*big.Float)(nil))
+	typeOfBigFloat    = typeOfBigFloatPtr.Elem()
 
 	typeOfTime = reflect.TypeOf((*time.Time)(nil)).Elem()
 

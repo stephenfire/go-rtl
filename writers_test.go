@@ -150,6 +150,19 @@ type timeObjects struct {
 	B *time.Time
 }
 
+type Timed time.Time
+
+type BigInt big.Int
+type BigRat big.Rat
+type BigFloat big.Float
+
+type convertStruct struct {
+	T Timed
+	I *BigInt
+	R *BigRat
+	F *BigFloat
+}
+
 var (
 	string1 = "string1"
 	string2 = "string2"
@@ -353,6 +366,19 @@ var encTests = []param{
 
 	{val: time.Now()},
 	{val: timePointer()},
+	{val: Timed(time.Now().Round(0))},
+	{val: (*BigInt)(big.NewInt(2223))},
+	{val: (*BigRat)(big.NewRat(333, 444))},
+	{val: (*BigFloat)(big.NewFloat(888.444))},
+	{val: (*BigInt)(nil)},
+	{val: (*BigRat)(nil)},
+	{val: (*BigFloat)(nil)},
+	{val: &convertStruct{
+		T: Timed(time.Now().Round(0)),
+		I: nil,
+		R: (*BigRat)(big.NewRat(88, 113)),
+		F: nil,
+	}},
 
 	{val: &timeObjects{A: time.Now(), B: timePointer()},
 		equaler: func(a interface{}, b reflect.Value) bool {

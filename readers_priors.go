@@ -26,6 +26,13 @@ import (
 type headerValueReader func(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) error
 
 var (
+	_readerPriorStructOrder = []reflect.Type{
+		typeOfBigInt,
+		typeOfBigRat,
+		typeOfBigFloat,
+		typeOfTime,
+	}
+
 	_priorStructReaders = map[reflect.Type]map[TypeHeader]typeReaderFunc{
 		typeOfBigInt:   bigIntReaders,
 		typeOfBigRat:   bigRatReaders,
@@ -64,7 +71,7 @@ var (
 
 func checkPriorStructsReader(th TypeHeader, length int, vr ValueReader, value reflect.Value, nesting int) (matched bool, err error) {
 	typ := value.Type()
-	for _, prior := range _priorStructOrder {
+	for _, prior := range _readerPriorStructOrder {
 		if typ.AssignableTo(prior) || typ.AssignableTo(reflect.PtrTo(prior)) {
 			readers, exist := _priorStructReaders[prior]
 			if exist {
@@ -75,6 +82,28 @@ func checkPriorStructsReader(th TypeHeader, length int, vr ValueReader, value re
 					err = fn(length, vr, value, nesting)
 				}
 				return true, err
+			}
+		} else if Convertible(typ, prior) {
+			readers, exist := _priorStructReaders[prior]
+			if exist {
+				fn := getFunc(prior, readers, th)
+				vptr := value.Addr()
+				priorVal := vptr.Convert(reflect.PtrTo(prior))
+				return true, fn(length, vr, priorVal, nesting)
+			}
+		} else if ConvertiblePtr(typ, reflect.PtrTo(prior)) {
+			readers, exist := _priorStructReaders[prior]
+			if exist {
+				if th == THZeroValue {
+					value.Set(reflect.Zero(typ))
+					return true, nil
+				}
+				fn := getFunc(prior, readers, th)
+				if value.IsNil() {
+					value.Set(reflect.New(typ.Elem()))
+				}
+				priorVal := value.Convert(reflect.PtrTo(prior))
+				return true, fn(length, vr, priorVal, nesting)
 			}
 		}
 	}
